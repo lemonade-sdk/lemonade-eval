@@ -1,0 +1,23 @@
+backend: llamacpp gpu
+checkpoint: Llama-3.2-1B-Instruct-GGUF
+iterations: 1
+max_memory_used_gbyte: 0.5004081726074219
+output_tokens: 32
+prefill_tokens_per_second: 5347.9287221375
+prompt_tokens: 256
+prompts:
+- 'Tell me an extremely long story that starts with the following but goes from there:
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word word word word word word word word word
+  word word word word word word word word '
+response_tokens: 32
+seconds_to_first_token: 0.047869
+token_generation_tokens_per_second: 176.34837621721712
+warmup_iterations: 0

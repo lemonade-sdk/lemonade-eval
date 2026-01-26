@@ -1,0 +1,14 @@
+backend: llamacpp gpu
+checkpoint: Llama-3.2-1B-Instruct-GGUF
+iterations: 1
+max_memory_used_gbyte: 0.4878654479980469
+output_tokens: 256
+prefill_tokens_per_second: 4206.056721679218
+prompt_tokens: 105
+prompts:
+- 'Tell me an extremely long story that starts with the following but goes from there:
+  word '
+response_tokens: 256
+seconds_to_first_token: 0.024964
+token_generation_tokens_per_second: 175.39412292661538
+warmup_iterations: 0

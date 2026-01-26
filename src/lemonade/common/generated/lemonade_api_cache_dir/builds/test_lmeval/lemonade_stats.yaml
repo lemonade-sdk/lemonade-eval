@@ -1,0 +1,6 @@
+backend: llamacpp gpu
+checkpoint: Qwen3-4B-Instruct-2507-GGUF
+lm_eval_average_exact_match: 0.0
+lm_eval_average_exact_match_units: '%'
+lm_eval_gsm8k_exact_match: 0.0
+lm_eval_gsm8k_exact_match_units: '%'
