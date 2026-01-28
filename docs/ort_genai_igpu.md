@@ -4,15 +4,7 @@
 
 ## Installation
 
-Install with OGA support:
-
-```bash
-# For CPU inference
-pip install lemonade-sdk[oga-cpu]
-
-# For NPU/Hybrid support on RyzenAI
-pip install lemonade-sdk[oga-ryzenai] --extra-index-url=https://pypi.amd.com/simple
-```
+See [Installation Instructions](../README.md#installation) in the main README for setup with OGA support (`oga-cpu` or `oga-ryzenai` extras).
 
 ## Get models
 

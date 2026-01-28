@@ -15,7 +15,7 @@ inputs:
     required: false
     default: ''
   install-package:
-    description: 'Optional package specification to install (e.g., ".[dev]" or "package-name")'
+    description: 'Optional package specification to install (e.g., ".[oga-cpu]" or "package-name")'
     required: false
     default: ''
   extra-index-url:

@@ -101,10 +101,9 @@ def import_error_heler(e: Exception):
     Print a helpful message in the event of an import error
     """
     raise ImportError(
-        f"{e}\n Please install lemonade-sdk with "
-        "one of the oga extras, for example:\n"
-        "pip install lemonade-sdk[dev,oga-cpu]\n"
-        "See https://lemonade-server.ai/install_options.html for details"
+        f"{e}\nPlease install with OGA support. "
+        "See installation instructions at:\n"
+        "https://github.com/lemonade-sdk/lemonade-eval#installation"
     )
 
 
@@ -394,8 +393,8 @@ class OgaLoad(FirstTool):
                 raise RuntimeError(
                     f"Required DLLs not found for {device} inference:\n  - {dll_list}\n"
                     f"Please ensure your RyzenAI installation is complete and supports {device}.\n"
-                    "Please reinstall the RyzenAI Software for your platform. Run:\n"
-                    "    pip install lemonade-sdk[oga-ryzenai]\n"
+                    "See installation instructions at:\n"
+                    "https://github.com/lemonade-sdk/lemonade-eval#installation\n"
                 )
 
             # Add the DLL source directory to PATH
@@ -552,10 +551,9 @@ class OgaLoad(FirstTool):
             import model_generate
         except ImportError as e:
             raise ImportError(
-                f"{e}\nYou are trying to use a developer tool that may not be "
-                "installed. Please install the required package using:\n"
-                "pip install -e .[dev,oga-ryzenai] \
-                    --extra-index-url https://pypi.amd.com/simple"
+                f"{e}\nThe model-generate package is required but not installed.\n"
+                "See installation instructions at:\n"
+                "https://github.com/lemonade-sdk/lemonade-eval#installation"
             )
 
         # Determine the appropriate flag based on the device type

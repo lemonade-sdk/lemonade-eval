@@ -66,7 +66,7 @@ jobs:
           Write-Host "Downloading latest lemonade-server-minimal.msi from releases..." -ForegroundColor Cyan
           
           # Use GitHub CLI to download the latest release asset
-          gh release download --repo ${{ github.repository }} --pattern "lemonade-server-minimal.msi" --output lemonade-server-minimal.msi
+          gh release download --repo lemonade-sdk/lemonade --pattern "lemonade-server-minimal.msi" --output lemonade-server-minimal.msi
           
           if (-not (Test-Path "lemonade-server-minimal.msi")) {
             Write-Host "ERROR: Failed to download lemonade-server-minimal.msi" -ForegroundColor Red
