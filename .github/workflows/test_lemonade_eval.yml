@@ -164,8 +164,9 @@ jobs:
           }
           
           # Test CLI
-          echo "Testing lemonade-eval CLI..."
-          $venvLemonade -m -i Qwen2.5-1.5B-Instruct-Hybrid load bench
+          Write-Host "Testing lemonade-eval CLI..."
+          $args = "-m -i Qwen2.5-1.5B-Instruct-Hybrid load bench"
+          $venvLemonade $args
           
           try {
             Write-Host "Running server integration tests with Qwen3-4B-Instruct-2507-GGUF..." -ForegroundColor Cyan
