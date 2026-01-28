@@ -288,7 +288,7 @@ On Windows, memory usage of the inference server backend can be tracked with the
 For example:
 
 ```bash
-    lemonade-eval --memory -i Llama-3.2-1B-Instruct-Hybrid load bench
+    lemonade-eval --memory -i Llama-3.2-1B-Instruct-GGUF load bench
 ```
 
 This generates a PNG file that is stored in the current folder and the build folder.  This file
