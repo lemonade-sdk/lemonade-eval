@@ -33,8 +33,7 @@ def get_available_profilers(warn_missing=False):
         if warn_missing:
             print(
                 "Warning: HWINFOPowerProfiler not available. "
-                "Install lemonade with dev extras: "
-                "pip install lemonade-sdk[dev]"
+                "Please check the power profiling documentation."
             )
     try:
         from lemonade.profilers.agt_power import AGTPowerProfiler
@@ -44,8 +43,7 @@ def get_available_profilers(warn_missing=False):
         if warn_missing:
             print(
                 "Warning: AGTPowerProfiler not available. "
-                "Install lemonade with dev extras: "
-                "pip install lemonade-sdk[dev]"
+                "Please check the power profiling documentation."
             )
 
     return profilers

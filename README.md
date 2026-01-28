@@ -78,23 +78,25 @@ source lemon/bin/activate
 
 ### 3. Install lemonade-eval
 
-Basic installation:
+Clone the repository and install in editable mode:
 
 ```bash
-pip install lemonade-sdk
+git clone https://github.com/lemonade-sdk/lemonade-eval.git
+cd lemonade-eval
+pip install -e .
 ```
 
 **Optional extras:**
 
 ```bash
 # For OGA CPU inference:
-pip install lemonade-sdk[oga-cpu]
+pip install -e .[oga-cpu]
 
 # For RyzenAI NPU support (Windows + Python 3.12 only):
-pip install lemonade-sdk[oga-ryzenai] --extra-index-url=https://pypi.amd.com/simple
+pip install -e .[oga-ryzenai] --extra-index-url=https://pypi.amd.com/simple
 
 # For model generation/export (Windows + Python 3.12 only):
-pip install lemonade-sdk[oga-ryzenai,model-generate] --extra-index-url=https://pypi.amd.com/simple
+pip install -e .[oga-ryzenai,model-generate] --extra-index-url=https://pypi.amd.com/simple
 ```
 
 ## Available Tools
@@ -181,13 +183,9 @@ lemonade-eval -i microsoft/Phi-3-mini-4k-instruct oga-load --device cpu --dtype 
 
 ### Installation for OGA
 
-```bash
-pip install lemonade-sdk[oga-cpu]
-# OR for RyzenAI NPU support:
-pip install lemonade-sdk[oga-ryzenai] --extra-index-url=https://pypi.amd.com/simple
-```
+See [Installation](#installation) above for OGA extras (`oga-cpu` or `oga-ryzenai`).
 
-See [OGA for iGPU and CPU](ort_genai_igpu.md) for more details on model building and caching.
+See [OGA for iGPU and CPU](docs/ort_genai_igpu.md) for more details on model building and caching.
 
 ## Accuracy Testing
 
