@@ -165,7 +165,7 @@ jobs:
           
           # Test CLI
           Write-Host "Testing lemonade-eval CLI..."
-          & $venvLemonade -m -i Qwen2.5-1.5B-Instruct-Hybrid load bench
+          & $venvLemonade -m -i Llama-3.2-1B-Instruct-Hybrid load bench
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           
           try {
