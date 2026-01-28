@@ -31,9 +31,10 @@ class Profiler(abc.ABC):
         This method is called to inform the profiler of the name of the tool that is about to start.
         """
 
-    def tool_stopping(self):
+    def tool_stopping(self, state):
         """
-        This method is called to inform the profiler that the tool has finished.
+        This method is called to inform the profiler that the tool has finished.  The state is passed
+        for the tool to gather any relevant data.
         """
 
     def stop(self):

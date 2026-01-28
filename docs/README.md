@@ -252,7 +252,7 @@ lemonade-eval -i Qwen3-4B-Instruct-2507-GGUF load bench
 The benchmark measures:
 - **Time to First Token (TTFT)**: Latency before first token is generated
 - **Tokens per Second**: Generation throughput
-- **Memory Usage**: Peak memory consumption (with `--memory` flag)
+- **Memory Usage**: Peak memory consumption (on Windows)
 
 #### Options
 
@@ -283,6 +283,18 @@ Results can be filtered by model name, device type, and data type:
 lemonade-eval report --perf --filter-model "Qwen"
 ```
 
+## Memory Usage
+
+On Windows, memory usage of the inference server backend can be tracked with the `--memory` flag.
+For example:
+
+```bash
+    lemonade-eval --memory -i Llama-3.2-1B-Instruct-Hybrid load bench
+```
+
+This generates a PNG file that is stored in the current folder and the build folder.  This file
+contains a figure plotting the memory usage of the inference backend over the `lemonade-eval`
+tool sequence.  Learn more by running `lemonade-eval -h`.
 
 ## Power Profiling
 

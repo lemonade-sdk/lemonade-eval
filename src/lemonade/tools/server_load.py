@@ -4,6 +4,8 @@ Tool for loading a model into Lemonade Server via the /api/v1/load endpoint.
 
 import argparse
 import platform
+import psutil
+import subprocess
 from typing import Optional
 
 import requests
@@ -364,6 +366,10 @@ class Load(FirstTool):
         backend_str = self._get_backend_string(server_url, model_name)
         state.save_stat(Keys.BACKEND, backend_str)
 
+        # Look up the inference processes
+        if platform.system() == "Windows":
+            state.inference_pids = self._get_inference_pids(server_url)
+
         # Create adapters for the loaded model
         state.model = ServerAdapter(
             server_url=server_url,
@@ -445,6 +451,53 @@ class Load(FirstTool):
         except Exception as e:  # pylint: disable=broad-exception-caught
             printing.log_warning(f"Could not determine backend: {e}")
             return "Lemonade Server"
+
+    def _get_inference_pids(self, server_url):
+        """
+        Extract the inference process ids from the load response.
+
+        Returns:
+            List of pids for the inference processes, or None if not applicable.
+        """
+        try:
+            health_response = requests.get(
+                f"{server_url}/api/v1/health",
+                timeout=10,
+            )
+            health_response.raise_for_status()
+            health_result = health_response.json()
+        except requests.exceptions.ConnectionError:
+            raise ConnectionError(
+                f"Cannot connect to Lemonade Server at {server_url}. "
+                "Make sure the server is running with 'lemonade-server serve'."
+            )
+        except requests.exceptions.RequestException as e:
+            raise ConnectionError(f"Error connecting to Lemonade Server: {e}")
+
+        # Extract the model_loaded info and find the associated backend_url
+        ports = []
+        for model_loaded in health_result.get("all_models_loaded", []):
+            if model_loaded.get("model_name") == health_result.get("model_loaded"):
+                backend_url = model_loaded.get("backend_url", "")
+                if backend_url.startswith("http://127.0.0.1:"):
+                    # Local backend, extract port from backend_url, e.g., http://127.0.0.1:PORT/v1
+                    port =  backend_url.split(":")[2].split("/")[0]
+                    ports.append(int(port))
+                    printing.log_info(f"Identified inference backend port {port} for {model_loaded.get("model_name")}")
+        if not ports:
+            return []
+        inference_pids = []
+        try:
+            connections = psutil.net_connections(kind="tcp4")
+            for conn in connections:
+                if conn.status == "LISTEN" and conn.laddr and conn.laddr.port in ports:
+                    inference_pids.append(conn.pid)
+                    printing.log_info(f"Identified process listening on port "
+                                      f"{conn.laddr.port}: {conn.pid}")
+        except Exception:  # pylint: disable=broad-exception-caught
+            pass
+
+        return inference_pids
 
 
 # This file was originally licensed under Apache 2.0. It has been modified.
