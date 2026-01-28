@@ -33,7 +33,7 @@ def get_available_profilers(warn_missing=False):
         if warn_missing:
             print(
                 "Warning: HWINFOPowerProfiler not available. "
-                "Please check the power profiling documentation."
+                "See: https://github.com/lemonade-sdk/lemonade-eval/blob/main/docs/power_profiling.md"  # pylint: disable=line-too-long
             )
     try:
         from lemonade.profilers.agt_power import AGTPowerProfiler
@@ -43,7 +43,7 @@ def get_available_profilers(warn_missing=False):
         if warn_missing:
             print(
                 "Warning: AGTPowerProfiler not available. "
-                "Please check the power profiling documentation."
+                "See: https://github.com/lemonade-sdk/lemonade-eval/blob/main/docs/power_profiling.md"  # pylint: disable=line-too-long
             )
 
     return profilers
