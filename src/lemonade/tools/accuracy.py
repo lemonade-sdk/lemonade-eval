@@ -349,10 +349,9 @@ class LMEvalHarness(Tool):
             import lm_eval
         except ImportError:
             error_msg = (
-                "lm-eval-harness is required but not installed. "
-                "Please install it using one of the following commands:\n"
-                "  pip install lemonade-sdk[dev]\n"
-                "  pip install -e .[dev]\n"
+                "lm-eval-harness is required but not installed.\n"
+                "See installation instructions at:\n"
+                "https://github.com/lemonade-sdk/lemonade-eval#installation"
             )
             printing.log_error(error_msg)
             raise ImportError(error_msg)

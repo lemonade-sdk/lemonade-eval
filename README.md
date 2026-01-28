@@ -79,23 +79,25 @@ source lemon/bin/activate
 
 ### 3. Install lemonade-eval
 
-Basic installation:
+Clone the repository and install in editable mode:
 
 ```bash
-pip install lemonade-sdk
+git clone https://github.com/lemonade-sdk/lemonade-eval.git
+cd lemonade-eval
+pip install -e .
 ```
 
 **Optional extras:**
 
 ```bash
 # For OGA CPU inference:
-pip install lemonade-sdk[oga-cpu]
+pip install -e .[oga-cpu]
 
 # For RyzenAI NPU support (Windows + Python 3.12 only):
-pip install lemonade-sdk[oga-ryzenai] --extra-index-url=https://pypi.amd.com/simple
+pip install -e .[oga-ryzenai] --extra-index-url=https://pypi.amd.com/simple
 
 # For model generation/export (Windows + Python 3.12 only):
-pip install lemonade-sdk[oga-ryzenai,model-generate] --extra-index-url=https://pypi.amd.com/simple
+pip install -e .[oga-ryzenai,model-generate] --extra-index-url=https://pypi.amd.com/simple
 ```
 
 ## Available Tools
@@ -182,13 +184,9 @@ lemonade-eval -i microsoft/Phi-3-mini-4k-instruct oga-load --device cpu --dtype 
 
 ### Installation for OGA
 
-```bash
-pip install lemonade-sdk[oga-cpu]
-# OR for RyzenAI NPU support:
-pip install lemonade-sdk[oga-ryzenai] --extra-index-url=https://pypi.amd.com/simple
-```
+See [Installation](#installation) above for OGA extras (`oga-cpu` or `oga-ryzenai`).
 
-See [OGA for iGPU and CPU](ort_genai_igpu.md) for more details on model building and caching.
+See [OGA for iGPU and CPU](docs/ort_genai_igpu.md) for more details on model building and caching.
 
 ## Accuracy Testing
 
@@ -204,7 +202,7 @@ lemonade-eval -i Qwen3-4B-Instruct-2507-GGUF load accuracy-mmlu --tests manageme
 lemonade-eval -i Qwen3-4B-Hybrid load accuracy-mmlu --tests management
 ```
 
-See [MMLU Accuracy](mmlu_accuracy.md) for the full list of subjects.
+See [MMLU Accuracy](docs/mmlu_accuracy.md) for the full list of subjects.
 
 ### HumanEval
 
@@ -214,7 +212,7 @@ Test code generation capabilities:
 lemonade-eval -i Qwen3-4B-Instruct-2507-GGUF load accuracy-humaneval
 ```
 
-See [HumanEval Accuracy](humaneval_accuracy.md) for details.
+See [HumanEval Accuracy](docs/humaneval_accuracy.md) for details.
 
 ### Perplexity
 
@@ -224,7 +222,7 @@ Calculate perplexity scores (requires OGA model loaded via `oga-load`):
 lemonade-eval -i microsoft/Phi-3-mini-4k-instruct oga-load --device cpu --dtype int4 accuracy-perplexity
 ```
 
-See [Perplexity Evaluation](perplexity.md) for interpretation guidance.
+See [Perplexity Evaluation](docs/perplexity.md) for interpretation guidance.
 
 ### lm-eval-harness
 
@@ -238,7 +236,7 @@ lemonade-eval -i Qwen3-4B-Instruct-2507-GGUF load lm-eval-harness --task gsm8k -
 lemonade-eval -i Qwen3-4B-Hybrid load lm-eval-harness --task gsm8k --limit 10
 ```
 
-See [lm-eval-harness](lm-eval.md) for supported tasks and options.
+See [lm-eval-harness](docs/lm-eval.md) for supported tasks and options.
 
 ## Benchmarking
 
@@ -268,7 +266,7 @@ To prepare your own fine-tuned model for OGA:
 1. Quantize the model using Quark
 2. Export using `oga-load`
 
-See the [Finetuned Model Export Guide](finetuned_model_export.md) for detailed instructions.
+See the [Finetuned Model Export Guide](docs/finetuned_model_export.md) for detailed instructions.
 
 ## LLM Report
 
@@ -299,7 +297,7 @@ tool sequence.  Learn more by running `lemonade-eval -h`.
 
 ## Power Profiling
 
-For power profiling, see [Power Profiling](power_profiling.md).
+For power profiling, see [Power Profiling](docs/power_profiling.md).
 
 ## System Information
 

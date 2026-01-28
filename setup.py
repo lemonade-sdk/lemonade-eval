@@ -38,6 +38,7 @@ setup(
         "tabulate",
         "sentencepiece",
         "huggingface-hub[hf_xet]==0.33.0",
+        "hf-transfer",
         "python-dotenv",
         # Dependencies for benchmarking, accuracy testing, and model preparation
         "torch>=2.6.0",
