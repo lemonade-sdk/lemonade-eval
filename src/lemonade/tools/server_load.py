@@ -4,8 +4,6 @@ Tool for loading a model into Lemonade Server via the /api/v1/load endpoint.
 
 import argparse
 import platform
-import psutil
-import subprocess
 from typing import Optional
 
 import requests
@@ -481,19 +479,26 @@ class Load(FirstTool):
                 backend_url = model_loaded.get("backend_url", "")
                 if backend_url.startswith("http://127.0.0.1:"):
                     # Local backend, extract port from backend_url, e.g., http://127.0.0.1:PORT/v1
-                    port =  backend_url.split(":")[2].split("/")[0]
+                    port = backend_url.split(":")[2].split("/")[0]
                     ports.append(int(port))
-                    printing.log_info(f"Identified inference backend port {port} for {model_loaded.get("model_name")}")
+                    printing.log_info(
+                        f"Identified inference backend port {port} "
+                        f"for {model_loaded.get("model_name")}"
+                    )
         if not ports:
             return []
         inference_pids = []
         try:
+            import psutil
+
             connections = psutil.net_connections(kind="tcp4")
             for conn in connections:
                 if conn.status == "LISTEN" and conn.laddr and conn.laddr.port in ports:
                     inference_pids.append(conn.pid)
-                    printing.log_info(f"Identified process listening on port "
-                                      f"{conn.laddr.port}: {conn.pid}")
+                    printing.log_info(
+                        f"Identified process listening on port "
+                        f"{conn.laddr.port}: {conn.pid}"
+                    )
         except Exception:  # pylint: disable=broad-exception-caught
             pass
 
