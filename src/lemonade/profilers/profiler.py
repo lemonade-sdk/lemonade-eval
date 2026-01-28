@@ -33,8 +33,8 @@ class Profiler(abc.ABC):
 
     def tool_stopping(self, state):
         """
-        This method is called to inform the profiler that the tool has finished.  The state is passed
-        for the tool to gather any relevant data.
+        This method is called to inform the profiler that the tool has finished.  The state is
+        passed for the tool to gather any relevant data.
         """
 
     def stop(self):

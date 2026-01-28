@@ -483,7 +483,7 @@ class Load(FirstTool):
                     ports.append(int(port))
                     printing.log_info(
                         f"Identified inference backend port {port} "
-                        f"for {model_loaded.get("model_name")}"
+                        f"for {model_loaded.get('model_name')}"
                     )
         if not ports:
             return []

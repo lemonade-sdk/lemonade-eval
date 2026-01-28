@@ -122,6 +122,7 @@ jobs:
           $serverExe = "$installPath\bin\lemonade-server.exe"
           $logFile = "${{ github.workspace }}\lemonade-server.log"
           $venvPython = ".venv\Scripts\python.exe"
+          $venvLemonade = ".venv\Scripts\lemonade-eval"
           
           Write-Host "Starting Lemonade Server..." -ForegroundColor Cyan
           
@@ -161,6 +162,10 @@ jobs:
             }
             exit 1
           }
+          
+          # Test CLI
+          echo "Testing lemonade-eval CLI..."
+          $venvLemonade -m -i Qwen2.5-1.5B-Instruct-Hybrid load bench
           
           try {
             Write-Host "Running server integration tests with Qwen3-4B-Instruct-2507-GGUF..." -ForegroundColor Cyan
