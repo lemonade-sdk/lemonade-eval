@@ -33,19 +33,23 @@ class MemoryTracker(Profiler):
         )
 
     @staticmethod
-    def get_time_mem_list(process):
-        return [time.time(), process.memory_info().rss]
+    def get_time_mem_list(processes):
+        if processes is None:
+            return [time.time(), float("nan")]
+        if len(processes) == 0:
+            return [time.time(), 0]
+        return [time.time(), sum([process.memory_info().rss for process in processes])]
 
     def __init__(self, parser_arg_value):
         super().__init__()
         self.status_stats += [fs.Keys.MEMORY_USAGE_PLOT]
         self.track_memory_interval = parser_arg_value
-        self.process_being_tracked = None
         self.build_dir = None
         self.queue = None
         self.tracker_process = None
         self.tracking_active = False
         self.yaml_path = None
+        self.processes_being_tracked = None
 
     def start(self, build_dir):
         if self.tracking_active:
@@ -53,10 +57,6 @@ class MemoryTracker(Profiler):
 
         # Save the folder where data and plot will be stored
         self.build_dir = build_dir
-
-        # Get the process being tracked
-        track_pid = os.getpid()
-        self.process_being_tracked = psutil.Process(track_pid)
 
         # Create queue for passing messages to the tracker
         self.queue = Queue()
@@ -68,7 +68,6 @@ class MemoryTracker(Profiler):
         self.tracker_process = Process(
             target=self._memory_tracker_,
             args=(
-                track_pid,
                 self.queue,
                 self.yaml_path,
                 self.track_memory_interval,
@@ -76,13 +75,24 @@ class MemoryTracker(Profiler):
         )
         self.tracker_process.start()
         self.tracking_active = True
+        # Set start of track and log a zero memory usage
         self.set_label("start")
-        self.sample()
+        self.queue.put(MemoryTracker.get_time_mem_list([]))
+
+    def add_pid_to_track(self, pid):
+        if self.tracking_active:
+            self.processes_being_tracked.append(psutil.Process(pid))
+            self.queue.put(pid)
 
     def tool_starting(self, tool_name):
         self.set_label(tool_name)
 
-    def tool_stopping(self):
+    def tool_stopping(self, state):
+        # Check it the tool as created the inference_processes attribute to state
+        if self.processes_being_tracked is None and hasattr(state, "inference_pids"):
+            self.processes_being_tracked = []
+            for pid in state.inference_pids:
+                self.add_pid_to_track(pid)
         self.sample()
 
     def set_label(self, label):
@@ -91,7 +101,12 @@ class MemoryTracker(Profiler):
 
     def sample(self):
         if self.tracking_active:
-            self.queue.put(MemoryTracker.get_time_mem_list(self.process_being_tracked))
+            if self.processes_being_tracked is None:
+                self.queue.put(MemoryTracker.get_time_mem_list([]))
+            else:
+                self.queue.put(
+                    MemoryTracker.get_time_mem_list(self.processes_being_tracked)
+                )
 
     def stop(self):
         if self.tracking_active:
@@ -136,8 +151,8 @@ class MemoryTracker(Profiler):
 
         # last_t and last_y are used to draw a line between the last point of the prior
         # track and the first point of the current track
-        last_t = None
-        last_y = None
+        last_t = 0
+        last_y = track[-1][1]
 
         plt.figure()
         for k, v in memory_tracks[1:]:
@@ -174,7 +189,6 @@ class MemoryTracker(Profiler):
 
     @staticmethod
     def _memory_tracker_(
-        tracked_pid,
         input_queue: Queue,
         yaml_path: str,
         track_memory_interval: float,
@@ -191,17 +205,14 @@ class MemoryTracker(Profiler):
           3) None - This indicates that the tracker should stop tracking, save its data to a file
                     and end
         """
+        tracked_processes = None
         memory_tracks = []
         current_track = []
         track_name = None
         tracker_exit = False
 
         try:
-            tracked_process = psutil.Process(tracked_pid)
-            while (
-                not tracker_exit and tracked_process.status() == psutil.STATUS_RUNNING
-            ):
-
+            while not tracker_exit:
                 time.sleep(track_memory_interval)
 
                 # Read any messages from the parent process
@@ -227,6 +238,10 @@ class MemoryTracker(Profiler):
                                     "Track name must be passed to memory tracker prior to "
                                     "sending data"
                                 )
+                        elif isinstance(message, int):
+                            if tracked_processes is None:
+                                tracked_processes = []
+                            tracked_processes.append(psutil.Process(message))
                         else:
                             raise TypeError(
                                 "Unrecognized message type in memory_tracker input queue: "
@@ -240,7 +255,7 @@ class MemoryTracker(Profiler):
                 if not tracker_exit and track_name is not None:
                     # Save current time and memory usage
                     current_track.append(
-                        MemoryTracker.get_time_mem_list(tracked_process)
+                        MemoryTracker.get_time_mem_list(tracked_processes)
                     )
 
             # Save the collected memory tracks

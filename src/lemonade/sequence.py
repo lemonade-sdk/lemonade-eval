@@ -288,7 +288,7 @@ class Sequence:
 
                 # Inform profilers that tool has finished
                 for profiler in self.profilers:
-                    profiler.tool_stopping()
+                    profiler.tool_stopping(state)
 
         start_times["cool down"] = time.time()
 
