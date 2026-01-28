@@ -89,7 +89,7 @@ class MemoryTracker(Profiler):
 
     def tool_stopping(self, state):
         # Check it the tool as created the inference_processes attribute to state
-        if self.processes_being_tracked is None and hasattr(state,"inference_pids"):
+        if self.processes_being_tracked is None and hasattr(state, "inference_pids"):
             self.processes_being_tracked = []
             for pid in state.inference_pids:
                 self.add_pid_to_track(pid)
@@ -104,7 +104,9 @@ class MemoryTracker(Profiler):
             if self.processes_being_tracked is None:
                 self.queue.put(MemoryTracker.get_time_mem_list([]))
             else:
-                self.queue.put(MemoryTracker.get_time_mem_list(self.processes_being_tracked))
+                self.queue.put(
+                    MemoryTracker.get_time_mem_list(self.processes_being_tracked)
+                )
 
     def stop(self):
         if self.tracking_active:
