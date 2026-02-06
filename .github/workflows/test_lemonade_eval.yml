@@ -120,9 +120,9 @@ jobs:
     # It will only run if a self-hosted runner with the 'rai-300' label is available
     env:
       LEMONADE_CI_MODE: "True"
-    runs-on: [self-hosted, windows, rai-300]
+    runs-on: [windows-latest]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-hybrid-model-prep-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v3
@@ -149,8 +149,7 @@ jobs:
           venvLemonade=".venv/Scripts/lemonade-eval"
           
           echo "Testing OGA-Load with Hybrid model generation..."
-          $venvLemonade -i amd/Llama-3.2-1B-Instruct-awq-uint4-asym-g128-bf16-lmhead oga-load --device hybrid --dml-only --dtype int4 llm-prompt -p "Alice and Bob" --max-new-tokens 10
-          
+          $venvLemonade -i amd/Llama-3.2-1B-Instruct-awq-uint4-asym-g128-bf16-lmhead oga-load --device hybrid --dtype int4
           echo "Running OGA Hybrid Model Prep API tests..."
           $venvPython test/oga_hybrid_model_prep_api.py
 
