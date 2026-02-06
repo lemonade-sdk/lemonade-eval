@@ -237,7 +237,7 @@ class OgaLoad(FirstTool):
             action="store_true",
             default=False,
             help="[model-generate] Pass this if packed constants are\n"
-                 "required (packed constants).",
+            "required (packed constants).",
         )
 
         parser.add_argument(
@@ -245,7 +245,7 @@ class OgaLoad(FirstTool):
             choices=["jit_npu", "non_jit"],
             default=None,
             help="[model-generate] Script variant: jit_npu (hybrid),\n"
-                 "non_jit (NPU basic) (default depends on device)",
+            "non_jit (NPU basic) (default depends on device)",
         )
 
         parser.add_argument(
@@ -259,7 +259,7 @@ class OgaLoad(FirstTool):
             ],
             default=None,
             help="[model-generate] Optimization: prefill(_llama3) (hybrid),\n"
-                 "decode/full_fusion(_llama3) (NPU basic)",
+            "decode/full_fusion(_llama3) (NPU basic)",
         )
 
         parser.add_argument(
@@ -267,7 +267,7 @@ class OgaLoad(FirstTool):
             default=None,
             type=int,
             help="[model-generate] Max sequence length for prefill\n"
-                 "fusion (default: 4096)",
+            "fusion (default: 4096)",
         )
 
         parser.add_argument(
