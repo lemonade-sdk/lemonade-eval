@@ -232,6 +232,62 @@ class OgaLoad(FirstTool):
             f'{", ".join([value + " for " + key for key, value in execution_providers.items()])}.',
         )
 
+        parser.add_argument(
+            "--packed-const",
+            action="store_true",
+            default=False,
+            help="[model-generate] Pass this if packed constants are required",
+        )
+
+        parser.add_argument(
+            "--script-option",
+            choices=["jit_npu", "non_jit"],
+            default=None,
+            help="[model-generate] Script variant (default: jit_npu for hybrid, non_jit for NPU basic)",
+        )
+
+        parser.add_argument(
+            "--optimize",
+            choices=["prefill", "prefill_llama3", "decode", "full_fusion", "full_fusion_llama3"],
+            default=None,
+            help="[model-generate] Optimization mode (prefill/prefill_llama3 for hybrid, decode/full_fusion/full_fusion_llama3 for NPU)",
+        )
+
+        parser.add_argument(
+            "--max-seq-len",
+            default=None,
+            type=int,
+            help="[model-generate] Max sequence length for prefill fusion (default: 4096)",
+        )
+
+        parser.add_argument(
+            "--npu-op-version",
+            choices=["v1", "v2"],
+            default=None,
+            help="[model-generate] NPU LLM op version (v1 / v2)",
+        )
+
+        parser.add_argument(
+            "--npu-basic",
+            action="store_true",
+            default=False,
+            help="[model-generate] Use basic NPU flow with matmulnbits pass file",
+        )
+
+        parser.add_argument(
+            "--npu-use-ep",
+            action="store_true",
+            default=False,
+            help="[model-generate] Use EP (Execution Provider) flow (only applies to --npu --optimize decode)",
+        )
+
+        parser.add_argument(
+            "--no-prune-logits",
+            action="store_true",
+            default=False,
+            help="[model-generate] Disable logits pruning by setting prune_logits=false",
+        )
+
         return parser
 
     @staticmethod
@@ -378,24 +434,6 @@ class OgaLoad(FirstTool):
             dll_source_path = os.path.join(
                 env_path, "Lib", "site-packages", "onnxruntime_genai"
             )
-            required_dlls = ["libutf8_validity.dll", "abseil_dll.dll"]
-
-            # Validate that all required DLLs exist in the source directory
-            missing_dlls = []
-
-            for dll_name in required_dlls:
-                dll_source = os.path.join(dll_source_path, dll_name)
-                if not os.path.exists(dll_source):
-                    missing_dlls.append(dll_source)
-
-            if missing_dlls:
-                dll_list = "\n  - ".join(missing_dlls)
-                raise RuntimeError(
-                    f"Required DLLs not found for {device} inference:\n  - {dll_list}\n"
-                    f"Please ensure your RyzenAI installation is complete and supports {device}.\n"
-                    "See installation instructions at:\n"
-                    "https://github.com/lemonade-sdk/lemonade-eval#installation\n"
-                )
 
             # Add the DLL source directory to PATH
             current_path = os.environ.get("PATH", "")
@@ -543,7 +581,22 @@ class OgaLoad(FirstTool):
             os.chdir(saved_state["cwd"])
             os.environ["PATH"] = saved_state["path"]
 
-    def _generate_model_for_oga(self, output_model_path, device, input_model_path):
+    def _generate_model_for_oga(
+        self,
+        output_model_path,
+        device,
+        input_model_path,
+        packed_const=False,
+        script_option=None,
+        optimize=None,
+        max_seq_len=None,
+        npu_op_version=None,
+        npu_basic=False,
+        npu_use_ep=False,
+        no_prune_logits=False,
+        dml_only=False,
+        cpu_only=False,
+    ):
         """
         Uses the model_generate tool to generate the model for OGA hybrid or npu targets.
         """
@@ -569,18 +622,31 @@ class OgaLoad(FirstTool):
 
         try:
             if device_flag == "npu":
+                script_opt = script_option if script_option is not None else "non_jit"
                 model_generate.generate_npu_model(
                     input_model=input_model_path,
                     output_dir=output_model_path,
-                    packed_const=False,
+                    packed_const=packed_const,
+                    script_option=script_opt,
+                    optimize=optimize,
+                    max_seq_len=max_seq_len,
+                    npu_op_version=npu_op_version,
+                    basic=npu_basic,
+                    use_ep=npu_use_ep,
+                    no_prune_logits=no_prune_logits,
+                    cpu_only=cpu_only,
+
                 )
             else:  # hybrid
+                script_opt = script_option if script_option is not None else "jit_npu"
                 model_generate.generate_hybrid_model(
                     input_model=input_model_path,
                     output_dir=output_model_path,
-                    script_option="jit_npu",
-                    mode="bf16",
-                    dml_only=False,
+                    script_option=script_opt,
+                    optimize=optimize,
+                    max_seq_len=max_seq_len,
+                    no_prune_logits=no_prune_logits,
+                    dml_only=dml_only,
                 )
         except Exception as e:
             raise RuntimeError(
@@ -600,6 +666,16 @@ class OgaLoad(FirstTool):
         trust_remote_code=False,
         subfolder: str = None,
         do_not_upgrade: bool = False,
+        packed_const: bool = False,
+        script_option: str = None,
+        optimize: str = None,
+        max_seq_len: int = None,
+        npu_op_version: str = None,
+        npu_basic: bool = False,
+        npu_use_ep: bool = False,
+        no_prune_logits: bool = False,
+        dml_only: bool = False,
+        cpu_only: bool = False,
     ) -> State:
         from lemonade.common.network import (
             custom_snapshot_download,
@@ -714,6 +790,7 @@ class OgaLoad(FirstTool):
                         "It does not contain ONNX or safetensors files."
                     )
                 if device in ["npu", "hybrid"]:
+                    needs_generation = False
                     if is_onnx_model:
                         if is_preoptimized_onnx:
                             # Use HuggingFace cache path as it is
@@ -721,11 +798,7 @@ class OgaLoad(FirstTool):
                         else:
                             # If ONNX but not modified yet for Hybrid or NPU,
                             # needs further optimization
-                            self._generate_model_for_oga(
-                                full_model_path,
-                                device,
-                                input_model_path,
-                            )
+                            needs_generation = True
                     elif is_safetensors_model:
                         config_path = os.path.join(input_model_path, "config.json")
                         if os.path.exists(config_path):
@@ -733,9 +806,7 @@ class OgaLoad(FirstTool):
                                 config = json.load(f)
                             if "quantization_config" in config:
                                 # If quantized, use subprocess to generate the model
-                                self._generate_model_for_oga(
-                                    full_model_path, device, input_model_path
-                                )
+                                needs_generation = True
                             else:
                                 raise ValueError(
                                     f"The safetensors model {checkpoint} is not quantized. "
@@ -749,6 +820,23 @@ class OgaLoad(FirstTool):
                     else:
                         raise ValueError(
                             f"Unsupported model type for checkpoint: {checkpoint}"
+                        )
+
+                    if needs_generation:
+                        self._generate_model_for_oga(
+                            full_model_path,
+                            device,
+                            input_model_path,
+                            packed_const,
+                            script_option,
+                            optimize,
+                            max_seq_len,
+                            npu_op_version,
+                            npu_basic,
+                            npu_use_ep,
+                            no_prune_logits,
+                            dml_only,
+                            cpu_only,
                         )
                 else:
                     if is_onnx_model:
