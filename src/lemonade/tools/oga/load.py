@@ -248,7 +248,13 @@ class OgaLoad(FirstTool):
 
         parser.add_argument(
             "--optimize",
-            choices=["prefill", "prefill_llama3", "decode", "full_fusion", "full_fusion_llama3"],
+            choices=[
+                "prefill",
+                "prefill_llama3",
+                "decode",
+                "full_fusion",
+                "full_fusion_llama3",
+            ],
             default=None,
             help="[model-generate] Optimization mode (prefill/prefill_llama3 for hybrid, decode/full_fusion/full_fusion_llama3 for NPU)",
         )
@@ -396,7 +402,7 @@ class OgaLoad(FirstTool):
         3. Check NPU driver version if required for device and ryzenai_version.
         """
 
-        # For RyzenAI 1.6.0, check NPU driver version for NPU and hybrid devices
+        # For RyzenAI 1.7.0, check NPU driver version for NPU and hybrid devices
         if device in ["npu", "hybrid"]:
             required_driver_version = REQUIRED_NPU_DRIVER_VERSION
 
@@ -635,7 +641,6 @@ class OgaLoad(FirstTool):
                     use_ep=npu_use_ep,
                     no_prune_logits=no_prune_logits,
                     cpu_only=cpu_only,
-
                 )
             else:  # hybrid
                 script_opt = script_option if script_option is not None else "jit_npu"
