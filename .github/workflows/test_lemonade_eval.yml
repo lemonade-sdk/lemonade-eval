@@ -120,9 +120,9 @@ jobs:
     # It will only run if a self-hosted runner with the 'rai-300' label is available
     env:
       LEMONADE_CI_MODE: "True"
-    runs-on: [self-hosted, windows, rai-300]
+    runs-on: [windows-latest]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-hybrid-model-prep-${{ github.ref }}
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v3
