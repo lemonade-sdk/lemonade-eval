@@ -288,7 +288,8 @@ class OgaLoad(FirstTool):
             "--npu-use-ep",
             action="store_true",
             default=False,
-            help="[model-generate] Use EP (Execution Provider) flow (only applies to --npu --optimize decode)",
+            help="[model-generate] Use EP (Execution Provider) flow\n"
+            "(only applies to --npu --optimize decode)",
         )
 
         parser.add_argument(
