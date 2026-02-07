@@ -45,17 +45,17 @@ def get_ryzenai_version_info():
 
     if Version(og.__version__) >= Version("0.7.0"):
         oga_path = os.path.dirname(og.__file__)
-        if og.__version__ in ("0.9.2", "0.9.2.1"):
-            return "1.6.0", oga_path
+        if og.__version__ in ("0.11.2", "0.11.2.1"):
+            return "1.7.0", oga_path
         else:
             raise ValueError(
                 f"Unsupported onnxruntime-genai-directml-ryzenai version: {og.__version__}\n"
-                "Only RyzenAI 1.6.0 is currently supported.\n"
+                "Only RyzenAI 1.7.0 is currently supported.\n"
                 "See installation instructions at: https://github.com/lemonade-sdk/lemonade-eval#installation"  # pylint: disable=line-too-long
             )
     else:
         raise ValueError(
             "Legacy RyzenAI installation detected (version < 0.7.0).\n"
-            "RyzenAI 1.4.0 and 1.5.0 are no longer supported. Please upgrade to 1.6.0.\n"
+            "RyzenAI 1.4.0, 1.5.0 and 1.6.0 are no longer supported. Please upgrade to 1.7.0.\n"
             "See installation instructions at: https://github.com/lemonade-sdk/lemonade-eval#installation"  # pylint: disable=line-too-long
         )
