@@ -62,6 +62,8 @@ setup(
         ],
         "model-generate": [
             "model-generate==1.7.0; platform_system=='Windows' and python_version=='3.12'",
+            "numpy<2",
+            "onnx_ir",
         ],
     },
     classifiers=[],
