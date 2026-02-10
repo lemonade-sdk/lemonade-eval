@@ -96,7 +96,7 @@ pip install -e .[oga-cpu]
 # For RyzenAI NPU support (Windows + Python 3.12 only):
 pip install -e .[oga-ryzenai] --extra-index-url=https://pypi.amd.com/simple
 
-# For model generation/export (Windows + Python 3.12 only):
+# For model generation/custom export (Windows + Python 3.12 only):
 pip install -e .[oga-ryzenai,model-generate] --extra-index-url=https://pypi.amd.com/simple
 ```
 
@@ -171,15 +171,15 @@ See the [Models List](https://lemonade-server.ai/docs/server/server_models/) for
 
 ## OGA-Load for Model Preparation
 
-The `oga-load` tool is for preparing custom OGA (ONNX Runtime GenAI) models. It can build and quantize models from Hugging Face for use on NPU, iGPU, or CPU.
-
+The `oga-load` tool is for preparing custom OGA (ONNX Runtime GenAI) models. It can build quark-quantized models from Hugging Face for use on NPU, iGPU, or CPU.
+Checkout the official [Ryzen AI Model Preparation guide](https://ryzenai.docs.amd.com/en/latest/oga_model_prepare.html) for more details.
 > **Note**: For running pre-built NPU/Hybrid models, use the server-based workflow above with `-NPU` or `-Hybrid` models. The `oga-load` tool is primarily for model preparation and testing custom checkpoints.
 
 ### Usage
 
 ```bash
 # Prepare and test a model on CPU
-lemonade-eval -i microsoft/Phi-3-mini-4k-instruct oga-load --device cpu --dtype int4 llm-prompt -p "Hello!"
+lemonade-eval -i amd/Llama-3.2-1B-Instruct-awq-uint4-asym-g128-bf16-lmhead oga-load --device hybrid --dtype int4 llm-prompt -p "Alice and Bob" --max-new-tokens 10
 ```
 
 ### Installation for OGA

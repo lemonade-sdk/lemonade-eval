@@ -53,15 +53,17 @@ setup(
     extras_require={
         # Extras for specific backends
         "oga-ryzenai": [
-            "onnxruntime-genai-directml-ryzenai==0.9.2.1",
+            "onnxruntime-genai-directml-ryzenai==0.11.2",
             "protobuf>=6.30.1",
         ],
         "oga-cpu": [
-            "onnxruntime-genai==0.9.2",
+            "onnxruntime-genai==0.11.2",
             "onnxruntime >=1.22.0",
         ],
         "model-generate": [
-            "model-generate==1.5.0; platform_system=='Windows' and python_version=='3.10'",
+            "model-generate==1.7.0; platform_system=='Windows' and python_version=='3.12'",
+            "numpy<2",
+            "onnx_ir",
         ],
     },
     classifiers=[],
