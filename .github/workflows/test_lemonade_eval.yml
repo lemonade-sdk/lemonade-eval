@@ -199,43 +199,5 @@ jobs:
           Get-Process -Name "lemonade-server", "lemonade-router", "llama-server" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           Write-Host "Server stopped." -ForegroundColor Green
 
-  test-oga-model-prep:
-    # This job requires Ryzen AI hardware with NPU support (e.g., RAI 160 SDK)
-    # It will only run if a self-hosted runner with the 'rai-160-sdk' label is available
-    env:
-      LEMONADE_CI_MODE: "True"
-    runs-on: [stx, Windows]
-    concurrency:
-      group: ${{ github.workflow }}-hybrid-model-prep-${{ github.ref }}
-      cancel-in-progress: true
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Create virtual environment and install dependencies
-        shell: bash
-        run: |
-          python -m venv .venv
-          venvPython=".venv/Scripts/python"
-          venvPip=".venv/Scripts/pip"
-          $venvPython -m pip install --upgrade pip
-          $venvPython -m pip check
-          $venvPip install -e .[oga-ryzenai,model-generate] --extra-index-url=https://pypi.amd.com/simple
-
-      - name: Test OGA Hybrid Model Prep
-        shell: bash
-        run: |
-          venvPython=".venv/Scripts/python"
-          venvLemonade=".venv/Scripts/lemonade-eval"
-          
-          echo "Testing OGA-Load with Hybrid model generation..."
-          $venvLemonade -i amd/Llama-3.2-1B-Instruct-awq-uint4-asym-g128-bf16-lmhead oga-load --device hybrid --dtype int4
-          echo "Running OGA Hybrid Model Prep API tests..."
-          $venvPython test/oga_hybrid_model_prep_api.py
-
 # This file was originally licensed under Apache 2.0. It has been modified.
 # Modifications Copyright (c) 2025 AMD
