@@ -204,7 +204,7 @@ jobs:
     # It will only run if a self-hosted runner with the 'rai-160-sdk' label is available
     env:
       LEMONADE_CI_MODE: "True"
-    runs-on: [rai-160-sdk, Windows]
+    runs-on: [stx, Windows]
     concurrency:
       group: ${{ github.workflow }}-hybrid-model-prep-${{ github.ref }}
       cancel-in-progress: true
