@@ -3,6 +3,8 @@ Tool for loading a model into Lemonade Server via the /api/v1/load endpoint.
 """
 
 import argparse
+import base64
+import mimetypes
 import platform
 from typing import Optional
 
@@ -88,6 +90,29 @@ class ServerAdapter(ModelAdapter):
         self.timeout = timeout
         self.type = "server"
 
+    @staticmethod
+    def _prepare_image_url(image_path: str) -> str:
+        """
+        Convert an image file path to a base64 data URL, or return a URL as-is.
+
+        Args:
+            image_path: Local file path or HTTP(S) URL to an image.
+
+        Returns:
+            A data URL (base64-encoded) or the original URL.
+        """
+        if image_path.startswith(("http://", "https://")):
+            return image_path
+
+        mime_type, _ = mimetypes.guess_type(image_path)
+        if mime_type is None:
+            mime_type = "image/jpeg"
+
+        with open(image_path, "rb") as f:
+            image_data = base64.b64encode(f.read()).decode("utf-8")
+
+        return f"data:{mime_type};base64,{image_data}"
+
     def generate(
         self,
         input_ids,
@@ -97,6 +122,7 @@ class ServerAdapter(ModelAdapter):
         top_k: int = None,
         repeat_penalty: float = None,
         save_max_memory_used: bool = False,
+        image: str = None,
         **kwargs,  # pylint: disable=unused-argument
     ):
         """
@@ -110,6 +136,7 @@ class ServerAdapter(ModelAdapter):
             top_k: Top-k sampling parameter
             repeat_penalty: Repetition penalty
             save_max_memory_used: If True, capture wrapped server memory usage
+            image: Optional path or URL to an image for VLM models
             **kwargs: Additional arguments (ignored)
 
         Returns:
@@ -117,10 +144,21 @@ class ServerAdapter(ModelAdapter):
         """
         prompt = input_ids  # PassthroughTokenizer passes text directly
 
+        # Build message content (multimodal if image is provided)
+        if image is not None:
+            image_url = self._prepare_image_url(image)
+            content = [
+                {"type": "image_url", "image_url": {"url": image_url}},
+                {"type": "text", "text": prompt},
+            ]
+            messages = [{"role": "user", "content": content}]
+        else:
+            messages = [{"role": "user", "content": prompt}]
+
         # Build request payload using chat/completions format
         payload = {
             "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "max_tokens": max_new_tokens,
             "stream": False,
             "cache_prompt": False,  # Disable prompt caching for accurate benchmarking
