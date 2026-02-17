@@ -259,6 +259,27 @@ The benchmark measures:
 lemonade-eval -i Qwen3-4B-Instruct-2507-GGUF load bench --iterations 5 --warmup-iterations 2 --output-tokens 128
 ```
 
+### VLM (Vision-Language Model) Benchmarking
+
+Benchmark Vision-Language Models by providing an image with the `--image` flag:
+
+```bash
+# Benchmark a VLM with an image
+lemonade-eval -i Qwen3-4B-VL-FLM load bench --image photo.jpg -p "Describe this image in detail" --output-tokens 128
+```
+
+Use `--image-size` to resize the image before sending, which reduces visual token count to fit within the model's context window:
+
+```bash
+# Resize to exact dimensions (WIDTHxHEIGHT)
+lemonade-eval -i Qwen3-4B-VL-FLM load bench --image photo.jpg --image-size 1024x800 --output-tokens 128
+
+# Resize by capping the longest side (preserves aspect ratio)
+lemonade-eval -i Qwen3-4B-VL-FLM load bench --image photo.jpg --image-size 384 --output-tokens 128
+```
+
+The `-p` flag controls the text portion of the prompt. Pass an integer for a synthetic prompt of that token length, or a string for a custom prompt. Image tokens are additional and reported by the server in the total input token count.
+
 ## Exporting a Finetuned Model
 
 To prepare your own fine-tuned model for OGA:
