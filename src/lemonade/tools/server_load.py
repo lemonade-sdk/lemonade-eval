@@ -4,6 +4,7 @@ Tool for loading a model into Lemonade Server via the /api/v1/load endpoint.
 
 import argparse
 import base64
+import io
 import mimetypes
 import platform
 from typing import Optional
@@ -91,12 +92,57 @@ class ServerAdapter(ModelAdapter):
         self.type = "server"
 
     @staticmethod
-    def _prepare_image_url(image_path: str) -> str:
+    def _resize_image(image_path: str, width: int, height: int) -> bytes:
+        """
+        Resize an image to the given width and height.
+
+        Args:
+            image_path: Path to the image file.
+            width: Target width in pixels.
+            height: Target height in pixels.
+
+        Returns:
+            JPEG-encoded bytes of the resized image.
+        """
+        from PIL import Image  # pylint: disable=import-outside-toplevel
+
+        img = Image.open(image_path)
+        img = img.resize((width, height), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+
+    @staticmethod
+    def _parse_image_size(image_size: str):
+        """
+        Parse an image size string into (width, height) or a single max dimension.
+
+        Args:
+            image_size: Either "WIDTHxHEIGHT" (e.g. "1024x800") for exact
+                dimensions, or a single integer string (e.g. "384") to cap
+                the longest side while preserving aspect ratio.
+
+        Returns:
+            Tuple of (width, height) for exact resize, or (max_dim, None) for
+            aspect-ratio-preserving resize.
+        """
+        if "x" in image_size.lower():
+            parts = image_size.lower().split("x")
+            return int(parts[0]), int(parts[1])
+        return int(image_size), None
+
+    @staticmethod
+    def _prepare_image_url(image_path: str, image_size: str = None) -> str:
         """
         Convert an image file path to a base64 data URL, or return a URL as-is.
 
+        When image_size is provided, the image is resized client-side to reduce
+        the number of visual tokens the VLM needs to process.
+
         Args:
             image_path: Local file path or HTTP(S) URL to an image.
+            image_size: Optional resize spec -- "WIDTHxHEIGHT" for exact
+                dimensions, or a single integer for max longest side.
 
         Returns:
             A data URL (base64-encoded) or the original URL.
@@ -104,13 +150,28 @@ class ServerAdapter(ModelAdapter):
         if image_path.startswith(("http://", "https://")):
             return image_path
 
-        mime_type, _ = mimetypes.guess_type(image_path)
-        if mime_type is None:
+        if image_size is not None:
+            width, height = ServerAdapter._parse_image_size(image_size)
+            if height is None:
+                # Single value: cap longest side, preserve aspect ratio
+                from PIL import Image  # pylint: disable=import-outside-toplevel
+
+                img = Image.open(image_path)
+                orig_w, orig_h = img.size
+                scale = width / max(orig_w, orig_h)
+                height = int(orig_h * scale)
+                width = int(orig_w * scale)
+
+            image_bytes = ServerAdapter._resize_image(image_path, width, height)
             mime_type = "image/jpeg"
+        else:
+            mime_type, _ = mimetypes.guess_type(image_path)
+            if mime_type is None:
+                mime_type = "image/jpeg"
+            with open(image_path, "rb") as f:
+                image_bytes = f.read()
 
-        with open(image_path, "rb") as f:
-            image_data = base64.b64encode(f.read()).decode("utf-8")
-
+        image_data = base64.b64encode(image_bytes).decode("utf-8")
         return f"data:{mime_type};base64,{image_data}"
 
     def generate(
@@ -123,6 +184,7 @@ class ServerAdapter(ModelAdapter):
         repeat_penalty: float = None,
         save_max_memory_used: bool = False,
         image: str = None,
+        image_size: str = None,
         **kwargs,  # pylint: disable=unused-argument
     ):
         """
@@ -137,6 +199,7 @@ class ServerAdapter(ModelAdapter):
             repeat_penalty: Repetition penalty
             save_max_memory_used: If True, capture wrapped server memory usage
             image: Optional path or URL to an image for VLM models
+            image_size: Optional resize spec ("WIDTHxHEIGHT" or single int string)
             **kwargs: Additional arguments (ignored)
 
         Returns:
@@ -146,7 +209,7 @@ class ServerAdapter(ModelAdapter):
 
         # Build message content (multimodal if image is provided)
         if image is not None:
-            image_url = self._prepare_image_url(image)
+            image_url = self._prepare_image_url(image, image_size=image_size)
             content = [
                 {"type": "image_url", "image_url": {"url": image_url}},
                 {"type": "text", "text": prompt},

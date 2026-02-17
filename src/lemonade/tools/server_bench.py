@@ -59,6 +59,17 @@ class ServerBench(Bench):
             "The -p flag controls the text portion of the prompt.",
         )
 
+        parser.add_argument(
+            "--image-size",
+            type=str,
+            default=None,
+            help="Resize the image before sending to the server. Accepts "
+            "WIDTHxHEIGHT (e.g. --image-size 1024x800) to resize to exact "
+            "dimensions, or a single integer (e.g. --image-size 384) to cap "
+            "the longest side while preserving aspect ratio. Reduces visual "
+            "token count for VLM models. Only applies when --image is set.",
+        )
+
         return parser
 
     # Prefix to encourage long model responses for benchmarking
@@ -81,6 +92,7 @@ class ServerBench(Bench):
         """
         pre_parser = argparse.ArgumentParser(add_help=False)
         pre_parser.add_argument("--image", type=str, default=None)
+        pre_parser.add_argument("--image-size", type=str, default=None)
         pre_args, _ = pre_parser.parse_known_args(args)
         self._image = pre_args.image
 
@@ -153,6 +165,7 @@ class ServerBench(Bench):
             **kwargs: Additional arguments, including 'image' for VLM benchmarking
         """
         image = kwargs.get("image", None)
+        image_size = kwargs.get("image_size", None)
         if self.first_run_prompt:
             if not hasattr(state, "model"):
                 raise ValueError(
@@ -190,6 +203,7 @@ class ServerBench(Bench):
                     max_new_tokens=output_tokens,
                     save_max_memory_used=self.save_max_memory_used,
                     image=image,
+                    image_size=image_size,
                 )
 
                 # Check that we got valid metrics
