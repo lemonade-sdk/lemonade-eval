@@ -108,7 +108,8 @@ class ServerAdapter(ModelAdapter):
 
         img = Image.open(image_path)
         img = img.resize(
-            (width, height), Image.LANCZOS # pylint: disable=no-member
+            (width, height),
+            Image.Resampling.LANCZOS,  # pylint: disable=no-member
         )
         buf = io.BytesIO()
         img.save(buf, format="JPEG", quality=85)
