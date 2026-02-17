@@ -280,6 +280,12 @@ lemonade-eval -i Qwen3-4B-VL-FLM load bench --image photo.jpg --image-size 384 -
 
 The `-p` flag controls the text portion of the prompt. Pass an integer for a synthetic prompt of that token length, or a string for a custom prompt. Image tokens are additional and reported by the server in the total input token count.
 
+Full example with all options:
+
+```bash
+lemonade-eval -i Qwen3-4B-VL-FLM load bench --image photo.jpg --image-size 1024x800 -p 128 --output-tokens 128 --warmup-iterations 2 --iterations 3
+```
+
 ## Exporting a Finetuned Model
 
 To prepare your own fine-tuned model for OGA:
