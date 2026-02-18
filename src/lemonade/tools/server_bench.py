@@ -170,9 +170,8 @@ class ServerBench(Bench):
         # Prepare the image URL once to avoid redundant disk I/O, resizing,
         # and base64 encoding on every iteration.
         if image is not None:
-            image = ServerAdapter._prepare_image_url(  # pylint: disable=protected-access
-                image, image_size=image_size
-            )
+            # pylint: disable-next=protected-access
+            image = ServerAdapter._prepare_image_url(image, image_size=image_size)
             image_size = None
 
         if self.first_run_prompt:
