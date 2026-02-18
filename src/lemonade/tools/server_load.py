@@ -3,6 +3,9 @@ Tool for loading a model into Lemonade Server via the /api/v1/load endpoint.
 """
 
 import argparse
+import base64
+import io
+import mimetypes
 import platform
 from typing import Optional
 
@@ -88,6 +91,150 @@ class ServerAdapter(ModelAdapter):
         self.timeout = timeout
         self.type = "server"
 
+    @staticmethod
+    def _resize_image(image_path: str, width: int, height: int) -> tuple:
+        """
+        Resize an image to the given width and height, preserving the original
+        format where possible (e.g. PNG transparency is retained).
+
+        Args:
+            image_path: Path to the image file.
+            width: Target width in pixels.
+            height: Target height in pixels.
+
+        Returns:
+            Tuple of (image_bytes, mime_type) for the resized image.
+        """
+        from PIL import Image  # pylint: disable=import-outside-toplevel
+
+        img = Image.open(image_path)
+        original_format = img.format or "JPEG"
+
+        img = img.resize(
+            (width, height),
+            Image.Resampling.LANCZOS,  # pylint: disable=no-member
+        )
+        buf = io.BytesIO()
+
+        format_to_mime = {
+            "JPEG": "image/jpeg",
+            "PNG": "image/png",
+            "GIF": "image/gif",
+            "WEBP": "image/webp",
+        }
+
+        save_format = original_format if original_format in format_to_mime else "JPEG"
+        save_kwargs = {"quality": 85} if save_format == "JPEG" else {}
+        img.save(buf, format=save_format, **save_kwargs)
+        mime_type = format_to_mime.get(save_format, "image/jpeg")
+
+        return buf.getvalue(), mime_type
+
+    @staticmethod
+    def _parse_image_size(image_size: str):
+        """
+        Parse an image size string into (width, height) or a single max dimension.
+
+        Args:
+            image_size: Either "WIDTHxHEIGHT" (e.g. "1024x800") for exact
+                dimensions, or a single integer string (e.g. "384") to cap
+                the longest side while preserving aspect ratio.
+
+        Returns:
+            Tuple of (width, height) for exact resize, or (max_dim, None) for
+            aspect-ratio-preserving resize.
+
+        Raises:
+            ValueError: If the format is invalid or contains non-numeric parts.
+        """
+        if "x" in image_size.lower():
+            parts = image_size.lower().split("x")
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise ValueError(
+                    f"Invalid image size format '{image_size}'. "
+                    "Expected 'WIDTHxHEIGHT' (e.g. '1024x800') or a single "
+                    "integer (e.g. '384')."
+                )
+            try:
+                width, height = int(parts[0]), int(parts[1])
+            except ValueError:
+                raise ValueError(
+                    f"Invalid image size '{image_size}'. "
+                    "Width and height must be integers (e.g. '1024x800')."
+                )
+            if width <= 0 or height <= 0:
+                raise ValueError(
+                    f"Invalid image size '{image_size}'. "
+                    "Width and height must be positive integers."
+                )
+            return width, height
+
+        try:
+            max_dim = int(image_size)
+        except ValueError:
+            raise ValueError(
+                f"Invalid image size '{image_size}'. "
+                "Expected 'WIDTHxHEIGHT' (e.g. '1024x800') or a single "
+                "integer (e.g. '384')."
+            )
+        if max_dim <= 0:
+            raise ValueError(
+                f"Invalid image size '{image_size}'. "
+                "Dimension must be a positive integer."
+            )
+        return max_dim, None
+
+    @staticmethod
+    def _prepare_image_url(image_path: str, image_size: str = None) -> str:
+        """
+        Convert an image file path to a base64 data URL, or return a URL as-is.
+
+        When image_size is provided, the image is resized client-side to reduce
+        the number of visual tokens the VLM needs to process.
+
+        Args:
+            image_path: Local file path, HTTP(S) URL, or already-prepared data URL.
+            image_size: Optional resize spec -- "WIDTHxHEIGHT" for exact
+                dimensions, or a single integer for max longest side.
+
+        Returns:
+            A data URL (base64-encoded) or the original URL.
+        """
+        if image_path.startswith("data:"):
+            return image_path
+
+        if image_path.startswith(("http://", "https://")):
+            if image_size is not None:
+                printing.log_warning(
+                    f"--image-size '{image_size}' is ignored for HTTP URLs. "
+                    "Resize is only supported for local image files."
+                )
+            return image_path
+
+        if image_size is not None:
+            width, height = ServerAdapter._parse_image_size(image_size)
+            if height is None:
+                from PIL import Image  # pylint: disable=import-outside-toplevel
+
+                img = Image.open(image_path)
+                orig_w, orig_h = img.size
+                scale = width / max(orig_w, orig_h)
+                height = int(orig_h * scale)
+                width = int(orig_w * scale)
+
+            image_bytes, mime_type = ServerAdapter._resize_image(
+                image_path, width, height
+            )
+        else:
+            mime_type, _ = mimetypes.guess_type(image_path)
+            if mime_type is None:
+                mime_type = "image/jpeg"
+            with open(image_path, "rb") as f:
+                image_bytes = f.read()
+
+        image_data = base64.b64encode(image_bytes).decode("utf-8")
+        return f"data:{mime_type};base64,{image_data}"
+
     def generate(
         self,
         input_ids,
@@ -97,6 +244,8 @@ class ServerAdapter(ModelAdapter):
         top_k: int = None,
         repeat_penalty: float = None,
         save_max_memory_used: bool = False,
+        image: str = None,
+        image_size: str = None,
         **kwargs,  # pylint: disable=unused-argument
     ):
         """
@@ -110,6 +259,8 @@ class ServerAdapter(ModelAdapter):
             top_k: Top-k sampling parameter
             repeat_penalty: Repetition penalty
             save_max_memory_used: If True, capture wrapped server memory usage
+            image: Optional path or URL to an image for VLM models
+            image_size: Optional resize spec ("WIDTHxHEIGHT" or single int string)
             **kwargs: Additional arguments (ignored)
 
         Returns:
@@ -117,10 +268,21 @@ class ServerAdapter(ModelAdapter):
         """
         prompt = input_ids  # PassthroughTokenizer passes text directly
 
+        # Build message content (multimodal if image is provided)
+        if image is not None:
+            image_url = self._prepare_image_url(image, image_size=image_size)
+            content = [
+                {"type": "image_url", "image_url": {"url": image_url}},
+                {"type": "text", "text": prompt},
+            ]
+            messages = [{"role": "user", "content": content}]
+        else:
+            messages = [{"role": "user", "content": prompt}]
+
         # Build request payload using chat/completions format
         payload = {
             "model": self.model_name,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "max_tokens": max_new_tokens,
             "stream": False,
             "cache_prompt": False,  # Disable prompt caching for accurate benchmarking

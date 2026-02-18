@@ -19,6 +19,9 @@ class ServerBench(Bench):
     /api/v1/stats endpoint to collect performance metrics. It follows the
     same benchmarking methodology as other *-bench tools.
 
+    Supports both text-only LLMs and Vision-Language Models (VLMs). For VLMs,
+    use the --image flag to provide an image file or URL.
+
     Required input state:
         - model: ServerAdapter instance (set by the `load` tool)
         - tokenizer: ServerTokenizerAdapter instance
@@ -27,13 +30,15 @@ class ServerBench(Bench):
         - Performance statistics including TTFT, tokens/second, etc.
 
     Example usage:
-        lemonade-eval -i Qwen3-0.6B-GGUF load --server-url http://localhost:8000 bench
+        lemonade-eval -i Qwen3-0.6B-GGUF load bench
+        lemonade-eval -i Qwen3-4B-VL-FLM load bench --image photo.jpg
     """
 
     unique_name = "bench"
 
     def __init__(self):
         super().__init__(monitor_message="Benchmarking model on Lemonade Server")
+        self._image = None
 
     @staticmethod
     def parser(add_help: bool = True) -> argparse.ArgumentParser:
@@ -44,6 +49,27 @@ class ServerBench(Bench):
 
         parser = Bench.parser(parser)
 
+        parser.add_argument(
+            "--image",
+            type=str,
+            default=None,
+            help="Path to an image file or URL for VLM (Vision-Language Model) "
+            "benchmarking. When provided, each benchmark iteration sends a "
+            "multimodal prompt containing both the image and text. "
+            "The -p flag controls the text portion of the prompt.",
+        )
+
+        parser.add_argument(
+            "--image-size",
+            type=str,
+            default=None,
+            help="Resize the image before sending to the server. Accepts "
+            "WIDTHxHEIGHT (e.g. --image-size 1024x800) to resize to exact "
+            "dimensions, or a single integer (e.g. --image-size 384) to cap "
+            "the longest side while preserving aspect ratio. Reduces visual "
+            "token count for VLM models. Only applies when --image is set.",
+        )
+
         return parser
 
     # Prefix to encourage long model responses for benchmarking
@@ -52,6 +78,26 @@ class ServerBench(Bench):
         "but goes from there: "
     )
 
+    # Prefix for VLM benchmarking that encourages long responses about the image
+    VLM_PROMPT_PREFIX = (
+        "Describe this image in extreme detail, covering every single element, "
+        "color, texture, shape, and spatial relationship you can observe. "
+        "Then tell an extremely long creative story inspired by the image: "
+    )
+
+    def parse(self, state, args, known_only=True):
+        """
+        Override parse to extract --image before prompt processing, so that
+        get_prompt_str() can use a VLM-appropriate prompt prefix.
+        """
+        pre_parser = argparse.ArgumentParser(add_help=False)
+        pre_parser.add_argument("--image", type=str, default=None)
+        pre_parser.add_argument("--image-size", type=str, default=None)
+        pre_args, _ = pre_parser.parse_known_args(args)
+        self._image = pre_args.image
+
+        return super().parse(state, args, known_only)
+
     def get_prompt_str(self, state, token_length):
         """
         Returns a string with approximately the prescribed token length.
@@ -59,13 +105,20 @@ class ServerBench(Bench):
         The prompt includes a prefix that encourages long responses, followed
         by synthetic "word" tokens. We use calibration via the server's actual
         token count to match the target length.
+
+        For VLM models (when --image is set), uses a VLM-appropriate prefix
+        that encourages detailed image description. The -p token count controls
+        only the text portion; image tokens are additional.
         """
         model: ServerAdapter = state.model
+
+        # Choose prefix based on whether this is a VLM benchmark
+        prefix = self.VLM_PROMPT_PREFIX if self._image else self.PROMPT_PREFIX
 
         # Start with an initial estimate: prefix + "word " repeated
         # Assume prefix is ~20 tokens, so start with (token_length - 20) words
         initial_word_count = max(1, token_length - 20)
-        test_prompt = self.PROMPT_PREFIX + "word " * initial_word_count
+        test_prompt = prefix + "word " * initial_word_count
 
         # Make a calibration request to get the actual token count
         try:
@@ -83,7 +136,7 @@ class ServerBench(Bench):
 
             # Calculate adjusted word count
             adjusted_words = max(1, initial_word_count - delta)
-            return self.PROMPT_PREFIX + "word " * adjusted_words
+            return prefix + "word " * adjusted_words
 
         except Exception:  # pylint: disable=broad-exception-caught
             # If calibration fails, use initial estimation
@@ -109,8 +162,18 @@ class ServerBench(Bench):
             iterations: Number of benchmark iterations
             warmup_iterations: Number of warmup iterations (not counted in results)
             output_tokens: Target number of output tokens
-            **kwargs: Additional arguments (ignored)
+            **kwargs: Additional arguments, including 'image' for VLM benchmarking
         """
+        image = kwargs.get("image", None)
+        image_size = kwargs.get("image_size", None)
+
+        # Prepare the image URL once to avoid redundant disk I/O, resizing,
+        # and base64 encoding on every iteration.
+        if image is not None:
+            # pylint: disable-next=protected-access
+            image = ServerAdapter._prepare_image_url(image, image_size=image_size)
+            image_size = None
+
         if self.first_run_prompt:
             if not hasattr(state, "model"):
                 raise ValueError(
@@ -147,6 +210,8 @@ class ServerBench(Bench):
                     prompt,
                     max_new_tokens=output_tokens,
                     save_max_memory_used=self.save_max_memory_used,
+                    image=image,
+                    image_size=image_size,
                 )
 
                 # Check that we got valid metrics
