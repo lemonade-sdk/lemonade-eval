@@ -92,9 +92,10 @@ class ServerAdapter(ModelAdapter):
         self.type = "server"
 
     @staticmethod
-    def _resize_image(image_path: str, width: int, height: int) -> bytes:
+    def _resize_image(image_path: str, width: int, height: int) -> tuple:
         """
-        Resize an image to the given width and height.
+        Resize an image to the given width and height, preserving the original
+        format where possible (e.g. PNG transparency is retained).
 
         Args:
             image_path: Path to the image file.
@@ -102,18 +103,32 @@ class ServerAdapter(ModelAdapter):
             height: Target height in pixels.
 
         Returns:
-            JPEG-encoded bytes of the resized image.
+            Tuple of (image_bytes, mime_type) for the resized image.
         """
         from PIL import Image  # pylint: disable=import-outside-toplevel
 
         img = Image.open(image_path)
+        original_format = img.format or "JPEG"
+
         img = img.resize(
             (width, height),
             Image.Resampling.LANCZOS,  # pylint: disable=no-member
         )
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=85)
-        return buf.getvalue()
+
+        format_to_mime = {
+            "JPEG": "image/jpeg",
+            "PNG": "image/png",
+            "GIF": "image/gif",
+            "WEBP": "image/webp",
+        }
+
+        save_format = original_format if original_format in format_to_mime else "JPEG"
+        save_kwargs = {"quality": 85} if save_format == "JPEG" else {}
+        img.save(buf, format=save_format, **save_kwargs)
+        mime_type = format_to_mime.get(save_format, "image/jpeg")
+
+        return buf.getvalue(), mime_type
 
     @staticmethod
     def _parse_image_size(image_size: str):
@@ -128,11 +143,46 @@ class ServerAdapter(ModelAdapter):
         Returns:
             Tuple of (width, height) for exact resize, or (max_dim, None) for
             aspect-ratio-preserving resize.
+
+        Raises:
+            ValueError: If the format is invalid or contains non-numeric parts.
         """
         if "x" in image_size.lower():
             parts = image_size.lower().split("x")
-            return int(parts[0]), int(parts[1])
-        return int(image_size), None
+            if len(parts) != 2 or not parts[0] or not parts[1]:
+                raise ValueError(
+                    f"Invalid image size format '{image_size}'. "
+                    "Expected 'WIDTHxHEIGHT' (e.g. '1024x800') or a single "
+                    "integer (e.g. '384')."
+                )
+            try:
+                width, height = int(parts[0]), int(parts[1])
+            except ValueError:
+                raise ValueError(
+                    f"Invalid image size '{image_size}'. "
+                    "Width and height must be integers (e.g. '1024x800')."
+                )
+            if width <= 0 or height <= 0:
+                raise ValueError(
+                    f"Invalid image size '{image_size}'. "
+                    "Width and height must be positive integers."
+                )
+            return width, height
+
+        try:
+            max_dim = int(image_size)
+        except ValueError:
+            raise ValueError(
+                f"Invalid image size '{image_size}'. "
+                "Expected 'WIDTHxHEIGHT' (e.g. '1024x800') or a single "
+                "integer (e.g. '384')."
+            )
+        if max_dim <= 0:
+            raise ValueError(
+                f"Invalid image size '{image_size}'. "
+                "Dimension must be a positive integer."
+            )
+        return max_dim, None
 
     @staticmethod
     def _prepare_image_url(image_path: str, image_size: str = None) -> str:
@@ -143,20 +193,27 @@ class ServerAdapter(ModelAdapter):
         the number of visual tokens the VLM needs to process.
 
         Args:
-            image_path: Local file path or HTTP(S) URL to an image.
+            image_path: Local file path, HTTP(S) URL, or already-prepared data URL.
             image_size: Optional resize spec -- "WIDTHxHEIGHT" for exact
                 dimensions, or a single integer for max longest side.
 
         Returns:
             A data URL (base64-encoded) or the original URL.
         """
+        if image_path.startswith("data:"):
+            return image_path
+
         if image_path.startswith(("http://", "https://")):
+            if image_size is not None:
+                printing.log_warning(
+                    f"--image-size '{image_size}' is ignored for HTTP URLs. "
+                    "Resize is only supported for local image files."
+                )
             return image_path
 
         if image_size is not None:
             width, height = ServerAdapter._parse_image_size(image_size)
             if height is None:
-                # Single value: cap longest side, preserve aspect ratio
                 from PIL import Image  # pylint: disable=import-outside-toplevel
 
                 img = Image.open(image_path)
@@ -165,8 +222,9 @@ class ServerAdapter(ModelAdapter):
                 height = int(orig_h * scale)
                 width = int(orig_w * scale)
 
-            image_bytes = ServerAdapter._resize_image(image_path, width, height)
-            mime_type = "image/jpeg"
+            image_bytes, mime_type = ServerAdapter._resize_image(
+                image_path, width, height
+            )
         else:
             mime_type, _ = mimetypes.guess_type(image_path)
             if mime_type is None:

@@ -166,6 +166,13 @@ class ServerBench(Bench):
         """
         image = kwargs.get("image", None)
         image_size = kwargs.get("image_size", None)
+
+        # Prepare the image URL once to avoid redundant disk I/O, resizing,
+        # and base64 encoding on every iteration.
+        if image is not None:
+            image = ServerAdapter._prepare_image_url(image, image_size=image_size)
+            image_size = None
+
         if self.first_run_prompt:
             if not hasattr(state, "model"):
                 raise ValueError(
