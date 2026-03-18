@@ -17,20 +17,17 @@ def checkpoint_to_model_name(checkpoint_name: str) -> str:
     return checkpoint_name.split("/")[1]
 
 
-def get_timestamp() -> str:
+def get_build_timestamp(build_time) -> str:
     """
     Get a timestamp string in the format:
         <year>y_<month>m_<day>d_<hour>h_<minute>m_<second>s
     """
-    # Get the current time in GMT
-    current_time = datetime.now(timezone.utc)
-
     # Format the timestamp string
-    timestamp = current_time.strftime("%Yy_%mm_%dd_%Hh_%Mm_%Ss")
+    timestamp = build_time.strftime("%Yy_%mm_%dd_%Hh_%Mm_%Ss")
     return timestamp
 
 
-def build_name(input_name):
+def build_name(input_name, build_time):
     """
     Name the lemonade build by concatenating these two factors:
         1. Sanitize the input name (typically a model checkpoint name) by
@@ -54,7 +51,7 @@ def build_name(input_name):
         input_name_sanitized = input_name_sanitized.replace(":", "-")
 
     # Get the formatted timestamp string
-    timestamp = get_timestamp()
+    timestamp = get_build_timestamp(build_time)
 
     return f"{input_name_sanitized}_{timestamp}"
 

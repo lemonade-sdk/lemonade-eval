@@ -187,9 +187,13 @@ def get_available_builds(cache_dir):
 
     check_cache_dir(cache_dir)
 
+    builds_dir = os.path.abspath(build.builds_dir(cache_dir))
+    if not os.path.isdir(builds_dir):
+        return []
+
     builds = [
         pathlib.PurePath(build_name).name
-        for build_name in os.listdir(os.path.abspath(build.builds_dir(cache_dir)))
+        for build_name in os.listdir(builds_dir)
         if os.path.isdir(build.output_dir(cache_dir, build_name))
         and is_build_dir(cache_dir, build_name)
     ]
@@ -228,7 +232,7 @@ class Keys:
     # Prefix for reporting the execution status of a tool
     # In the report this will look like tool_status:TOOL_NAME
     TOOL_STATUS = "tool_status"
-    # Records the date and time of the evaluation after analysis but before
+    # Records the local date and time of the evaluation after analysis but before
     # build and benchmark
     TIMESTAMP = "timestamp"
     # Records the logfile of any failed tool/benchmark

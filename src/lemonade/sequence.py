@@ -3,10 +3,8 @@ import time
 import os
 import platform
 import copy
-from datetime import datetime
 from typing import List, Dict, Optional
 
-import pytz
 import psutil
 
 import lemonade.common.printing as printing
@@ -115,8 +113,7 @@ class Sequence:
         Executes the sequence of tools.
         """
 
-        current_time = datetime.now()
-        timestamp = current_time.strftime("%Y-%m-%d-%H%M%S")
+        timestamp = state.build_time.strftime("%Y-%m-%d-%H%M%S")
         start_times = {"warmup": time.time()}
 
         # Allow monitor to be globally disabled by an environment variable
@@ -161,11 +158,7 @@ class Sequence:
         state.save_stat(fs.Keys.BUILD_STATUS, build.FunctionStatus.INCOMPLETE)
 
         # Save a timestamp so that we know the order of builds within a cache
-        pacific_tz = pytz.timezone("America/Los_Angeles")
-        state.save_stat(
-            fs.Keys.TIMESTAMP,
-            datetime.now(pacific_tz),
-        )
+        state.save_stat(fs.Keys.TIMESTAMP, state.build_time)
 
         # Save the system information used for this build
         system_info = build.get_system_info_from_server()

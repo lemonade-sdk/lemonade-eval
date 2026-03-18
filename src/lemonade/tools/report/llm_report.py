@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 from typing import List
 import lemonade.common.printing as printing
+import lemonade.common.exceptions as exp
 import lemonade.common.filesystem as fs
 from lemonade.tools.management_tools import ManagementTool
 from lemonade.cache import DEFAULT_CACHE_DIR
@@ -148,7 +149,13 @@ class LemonadeReport(ManagementTool):
     ):
         # Process input arguments
         cache_dirs = [os.path.expanduser(dir) for dir in input_caches]
-        cache_dirs = fs.expand_inputs(cache_dirs)
+        try:
+            cache_dirs = fs.expand_inputs(cache_dirs)
+        except exp.ArgError as e:
+            printing.log_info(
+                f"No Lemonade cache folders exist for: {cache_dirs}. Error: {e}"
+            )
+            return
         report_dir = os.path.expanduser(output_dir)
 
         if perf:
