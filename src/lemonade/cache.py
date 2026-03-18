@@ -1,5 +1,4 @@
 import os
-from datetime import datetime, timezone
 
 # Allow an environment variable to override the default
 # location for the build cache
