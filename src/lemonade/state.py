@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import datetime
 from typing import Dict, Optional, Any
 import yaml
 import lemonade.common.build as build
@@ -61,6 +62,7 @@ class State:
         cache_dir: str,
         build_name: Optional[str] = None,
         sequence_info: Dict[str, Dict] = None,
+        build_time: Optional[datetime] = None,
         **kwargs,
     ):
 
@@ -75,6 +77,9 @@ class State:
         self.cache_dir = parsed_cache_dir
         self.build_name = build_name
         self.sequence_info = sequence_info
+        self.build_time = (
+            datetime.now().astimezone() if build_time is None else build_time
+        )
         self.lemonade_version = lemonade_version
         self.build_status = build.FunctionStatus.NOT_STARTED
         self.downcast_applied = False

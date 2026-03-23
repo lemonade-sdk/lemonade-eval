@@ -1,5 +1,6 @@
 import os
 import platform
+from datetime import datetime
 
 # pylint: disable=C0413
 # Prevent HF warnings from showing on every import
@@ -151,10 +152,12 @@ https://github.com/lemonade-sdk/lemonade/blob/main/docs/eval/README.md""",
         first_tool_args.append("--input")
         first_tool_args.append(global_args["input"])
 
+        build_time = datetime.now().astimezone()
         state = State(
             cache_dir=os.path.abspath(global_args["cache_dir"]),
-            build_name=cache.build_name(global_args["input"]),
+            build_name=cache.build_name(global_args["input"], build_time),
             sequence_info=sequence.info,
+            build_time=build_time,
         )
         sequence.launch(state)
     else:

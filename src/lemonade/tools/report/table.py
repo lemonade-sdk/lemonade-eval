@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
+from datetime import datetime
 import re
 from typing import Tuple, Dict, List
 import textwrap
@@ -585,9 +585,10 @@ class Table(ABC):
         """
         Returns the name of the .csv report
         """
-        day = datetime.now().day
-        month = datetime.now().month
-        year = datetime.now().year
+        currentTime = datetime.now()
+        day = currentTime.day
+        month = currentTime.month
+        year = currentTime.year
         date_key = f"{year}-{str(month).zfill(2)}-{str(day).zfill(2)}"
         return f"{prefix}{date_key}.csv"
 
@@ -774,7 +775,7 @@ class LemonadePerfTable(Table):
         # Filter out build if it is too old
         if not self.days is None:
             build_day = model_stats[fs.Keys.TIMESTAMP]
-            today = datetime.now(timezone.utc)
+            today = datetime.now()
             delta = today - build_day
             if delta.days > self.days:
                 return False
@@ -891,7 +892,7 @@ class LemonadePerfTable(Table):
 
     @staticmethod
     def get_report_name() -> str:
-        current_time = datetime.now(timezone.utc)
+        current_time = datetime.now()
         timestamp = current_time.strftime("%Y-%m-%d-%H%M%S")
         return f"{timestamp}_perf.csv"
 
