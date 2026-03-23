@@ -66,7 +66,7 @@ class AccuracyPerplexity(Tool):
         # Refer to docs/eval/perplexity.md for more information on sliding window
         stride = max_length // 2
         # Determine the total sequence length of the tokenized input
-        seq_len = encodings.input_ids.size(1)
+        seq_len = encodings.input_ids.size
 
         negative_log_likelihoods = []
         summary_data = []
@@ -79,9 +79,9 @@ class AccuracyPerplexity(Tool):
         for begin_location in range(0, seq_len, stride):
             end_location = min(begin_location + max_length, seq_len)
             target_len = end_location - prev_end_location
-            input_ids = encodings.input_ids[:, begin_location:end_location]
-            target_ids = input_ids.clone()
-            target_ids[:, :-target_len] = -100
+            input_ids = encodings.input_ids[begin_location:end_location]
+            target_ids = input_ids.copy()
+            target_ids[:-target_len] = -100
 
             # Forward pass the model to get logits
             with torch.no_grad():

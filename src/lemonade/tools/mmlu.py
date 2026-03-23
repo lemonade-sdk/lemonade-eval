@@ -266,7 +266,8 @@ def _gen_prompt(train_df, subject, k=-1):
 def _generate_response(tokenizer, model, input_ids):
     """Generates a model response for the given input IDs."""
     try:
-        response = model.generate(input_ids, max_new_tokens=1)
+        #response = model.generate(input_ids, max_new_tokens=1)
+        response = model.generate(input_ids, max_new_tokens=32)
         return tokenizer.decode(response[0], skip_special_tokens=True).strip()
     except subprocess.CalledProcessError as e:
         printing.log_warning(
