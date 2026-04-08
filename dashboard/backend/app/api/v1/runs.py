@@ -239,3 +239,32 @@ async def get_run_metrics(
         success=True,
         data=metrics,
     )
+
+
+@router.get("/benchmark/results", response_model=APIResponse)
+async def get_benchmark_results(
+    db: Session = Depends(get_db_session),
+):
+    """
+    Get benchmark results grouped by model.
+
+    Returns benchmark runs with their metrics, organized for comparison.
+    """
+    service = RunService(db)
+
+    # Get all benchmark runs
+    runs, _ = service.get_runs(run_type="benchmark", per_page=100)
+
+    # Get metrics for each run
+    results = []
+    for run in runs:
+        metrics = service.get_run_metrics(run.id)
+        results.append({
+            "run": run.model_dump(),
+            "metrics": [m.model_dump() for m in metrics],
+        })
+
+    return APIResponse(
+        success=True,
+        data=results,
+    )

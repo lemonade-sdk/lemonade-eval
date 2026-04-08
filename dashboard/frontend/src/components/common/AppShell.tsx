@@ -29,6 +29,7 @@ import {
   IconSun,
   IconMoon,
   IconBrandLemonade,
+  IconTrophy,
 } from '@tabler/icons-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '@/stores/uiStore';
@@ -44,6 +45,7 @@ const navLinks = [
   { path: '/dashboard', label: 'Dashboard', icon: IconDashboard },
   { path: '/models', label: 'Models', icon: IconCpu },
   { path: '/runs', label: 'Runs', icon: IconListDetails },
+  { path: '/benchmarks', label: 'Benchmarks', icon: IconTrophy },
   { path: '/compare', label: 'Compare', icon: IconChartBar },
   { path: '/import', label: 'Import', icon: IconUpload },
   { path: '/settings', label: 'Settings', icon: IconSettings },

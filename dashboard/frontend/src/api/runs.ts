@@ -115,6 +115,14 @@ export const runsApi = {
     }>>(`${BASE_PATH}/stats`);
     return data;
   },
+
+  /**
+   * Get benchmark results
+   */
+  async getBenchmarkResults(): Promise<APIResponse<unknown[]>> {
+    const { data } = await apiClient.get<APIResponse<unknown[]>>(`${BASE_PATH}/benchmark/results`);
+    return data;
+  },
 };
 
 export default runsApi;

@@ -16,6 +16,7 @@ import ComparePage from '@pages/compare/ComparePage';
 import ImportPage from '@pages/import/ImportPage';
 import SettingsPage from '@pages/settings/SettingsPage';
 import LoginPage from '@pages/auth/LoginPage';
+import BenchmarksPage from '@pages/benchmarks/BenchmarksPage';
 
 function App() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure(false);
@@ -36,6 +37,7 @@ function App() {
           <Route path="/runs" element={<RunsPage />} />
           <Route path="/runs/:id" element={<RunDetailPage />} />
           <Route path="/compare" element={<ComparePage />} />
+          <Route path="/benchmarks" element={<BenchmarksPage />} />
           <Route path="/import" element={<ImportPage />} />
           <Route path="/settings" element={<SettingsPage />} />
 

@@ -182,4 +182,16 @@ export function useRunStats() {
   };
 }
 
+export function useBenchmarkResults() {
+  const query = useQuery({
+    queryKey: [...QUERY_KEYS.runs.all, 'benchmark', 'results'],
+    queryFn: () => runsApi.getBenchmarkResults(),
+  });
+
+  return {
+    ...query,
+    data: query.data?.data || [],
+  };
+}
+
 export { QUERY_KEYS };
