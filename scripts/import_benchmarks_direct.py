@@ -13,10 +13,29 @@ from pathlib import Path
 backend_path = Path(__file__).parent / "dashboard" / "backend"
 sys.path.insert(0, str(backend_path))
 
-# Set environment variables
-os.environ["DATABASE_URL"] = "sqlite:///test.db"
+# Parse arguments first to set DATABASE_URL before imports
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Import benchmark results into database")
+    parser.add_argument(
+        "--results-file",
+        default="benchmark_results.json",
+        help="Path to benchmark results JSON file",
+    )
+    parser.add_argument(
+        "--db-url",
+        default="sqlite:///test.db",
+        help="Database URL",
+    )
+    args = parser.parse_args()
+    os.environ["DATABASE_URL"] = args.db_url
+else:
+    args = None
+
+# Set environment variables (TESTING must be false to use file-based DB)
 os.environ["DEBUG"] = "true"
-os.environ["TESTING"] = "true"
+os.environ["TESTING"] = "false"
+os.environ["TEST_DATABASE_URL"] = ""
 
 from app.database import sync_engine, Base, SyncSessionLocal
 from app.models import Model, Run, Metric
@@ -198,21 +217,4 @@ def import_benchmark_results(results_file: str = "benchmark_results.json"):
 
 
 if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Import benchmark results into database")
-    parser.add_argument(
-        "--results-file",
-        default="benchmark_results.json",
-        help="Path to benchmark results JSON file",
-    )
-    parser.add_argument(
-        "--db-url",
-        default="sqlite:///test.db",
-        help="Database URL",
-    )
-
-    args = parser.parse_args()
-
-    os.environ["DATABASE_URL"] = args.db_url
     import_benchmark_results(results_file=args.results_file)
