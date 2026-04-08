@@ -8,6 +8,7 @@ from app.api.v1.metrics import router as metrics_router
 from app.api.v1.import_routes import router as import_router
 from app.api.v1.health import router as health_router
 from app.api.v1.auth import router as auth_router
+from app.api.v1.cli_integration import router as cli_router
 
 __all__ = [
     "models_router",
@@ -16,4 +17,5 @@ __all__ = [
     "import_router",
     "health_router",
     "auth_router",
+    "cli_router",
 ]

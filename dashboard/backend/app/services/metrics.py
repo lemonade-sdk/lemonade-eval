@@ -1,5 +1,8 @@
 """
 Metric service for business logic related to evaluation metrics.
+
+Includes automatic cache invalidation after mutations to ensure
+cache consistency with database state.
 """
 
 import os
@@ -27,8 +30,41 @@ def _is_sqlite_mode() -> bool:
 class MetricService:
     """Service class for metric operations."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, cache_service=None):
+        """
+        Initialize metric service.
+
+        Args:
+            db: Database session
+            cache_service: Optional CacheService instance for auto-invalidation
+        """
         self.db = db
+        self.cache_service = cache_service
+
+    def _invalidate_metric_cache(self, run_id: Optional[str] = None) -> None:
+        """
+        Invalidate cache entries related to metrics.
+
+        Args:
+            run_id: Optional run ID for specific invalidation
+        """
+        if self.cache_service is None:
+            return
+
+        try:
+            from app.cache import get_cache_manager
+
+            cache = get_cache_manager()
+            if cache and cache.connect():
+                # Invalidate run metrics cache
+                if run_id:
+                    cache.delete(f"cache:metrics:run:{run_id}")
+
+                # Invalidate aggregated metrics caches
+                cache.invalidate_prefix("cache:metrics:aggregated")
+        except Exception as e:
+            # Log but don't fail the operation if cache invalidation fails
+            pass
 
     def get_metrics(
         self,
@@ -120,6 +156,9 @@ class MetricService:
             self.db.commit()
             self.db.refresh(metric)
 
+            # Invalidate cache after successful commit
+            self._invalidate_metric_cache(str(metric.run_id))
+
             return MetricResponse.model_validate(metric)
         except IntegrityError as e:
             self.db.rollback()
@@ -157,6 +196,12 @@ class MetricService:
             for metric in metrics:
                 self.db.refresh(metric)
 
+            # Invalidate cache after successful commit
+            # Get unique run_ids from metrics_data
+            run_ids = set(m.run_id for m in metrics_data)
+            for run_id in run_ids:
+                self._invalidate_metric_cache(run_id)
+
             return [MetricResponse.model_validate(m) for m in metrics]
         except IntegrityError as e:
             self.db.rollback()
@@ -191,8 +236,14 @@ class MetricService:
             if not metric:
                 return False
 
+            run_id = str(metric.run_id)
+
             self.db.delete(metric)
             self.db.commit()
+
+            # Invalidate cache after successful commit
+            self._invalidate_metric_cache(run_id)
+
             return True
         except SQLAlchemyError as e:
             self.db.rollback()

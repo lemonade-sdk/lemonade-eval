@@ -1,5 +1,8 @@
 """
 Run service for business logic related to evaluation runs.
+
+Includes automatic cache invalidation after mutations to ensure
+cache consistency with database state.
 """
 
 from datetime import datetime, timezone
@@ -18,8 +21,16 @@ from app.schemas import RunCreate, RunUpdate, RunResponse, PaginationMeta
 class RunService:
     """Service class for run operations."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, cache_service=None):
+        """
+        Initialize run service.
+
+        Args:
+            db: Database session
+            cache_service: Optional CacheService instance for auto-invalidation
+        """
         self.db = db
+        self.cache_service = cache_service
 
     def get_runs(
         self,
@@ -142,6 +153,9 @@ class RunService:
             self.db.commit()
             self.db.refresh(run)
 
+            # Invalidate cache after successful commit
+            self._invalidate_run_cache(str(run.id), run.model_id)
+
             return RunResponse.model_validate(run)
         except IntegrityError as e:
             self.db.rollback()
@@ -155,6 +169,36 @@ class RunService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Database error while creating run: {str(e)}",
             ) from e
+
+    def _invalidate_run_cache(self, run_id: str, model_id: Optional[str] = None) -> None:
+        """
+        Invalidate cache entries related to a run.
+
+        Args:
+            run_id: Run ID to invalidate
+            model_id: Optional model ID for additional invalidation
+        """
+        if self.cache_service is None:
+            return
+
+        try:
+            import asyncio
+            from app.cache import get_cache_manager
+
+            cache = get_cache_manager()
+            if cache and cache.connect():
+                # Invalidate run summary
+                cache.delete(f"cache:runs:summary:{run_id}")
+
+                # Invalidate runs list caches
+                cache.invalidate_prefix("cache:runs:list")
+
+                # Invalidate model-related caches if model_id provided
+                if model_id:
+                    cache.invalidate_prefix("cache:models")
+        except Exception as e:
+            # Log but don't fail the operation if cache invalidation fails
+            pass
 
     def update_run(self, run_id: str, run_data: RunUpdate) -> RunResponse | None:
         """
@@ -184,6 +228,9 @@ class RunService:
 
             self.db.commit()
             self.db.refresh(run)
+
+            # Invalidate cache after successful commit
+            self._invalidate_run_cache(str(run.id), str(run.model_id) if run.model_id else None)
 
             return RunResponse.model_validate(run)
         except SQLAlchemyError as e:
@@ -231,6 +278,9 @@ class RunService:
             self.db.commit()
             self.db.refresh(run)
 
+            # Invalidate cache after successful commit
+            self._invalidate_run_cache(str(run.id), str(run.model_id) if run.model_id else None)
+
             return RunResponse.model_validate(run)
         except SQLAlchemyError as e:
             self.db.rollback()
@@ -259,8 +309,14 @@ class RunService:
             if not run:
                 return False
 
+            model_id = str(run.model_id) if run.model_id else None
+
             self.db.delete(run)
             self.db.commit()
+
+            # Invalidate cache after successful commit
+            self._invalidate_run_cache(run_id, model_id)
+
             return True
         except SQLAlchemyError as e:
             self.db.rollback()
@@ -327,3 +383,81 @@ class RunService:
             "by_status": status_counts,
             "by_type": type_counts,
         }
+
+    async def get_by_build_name(self, build_name: str) -> Optional[Run]:
+        """
+        Get run by build name.
+
+        Args:
+            build_name: Build name to search for
+
+        Returns:
+            Run instance or None if not found
+        """
+        query = select(Run).where(Run.build_name == build_name)
+        return self.db.execute(query).scalar_one_or_none()
+
+    async def create_scheduled_run(
+        self,
+        model_id: str,
+        run_type: str,
+        schedule_id: str = None,
+    ) -> Run:
+        """
+        Create a run from scheduled evaluation.
+
+        Args:
+            model_id: Model ID
+            run_type: Evaluation type
+            schedule_id: Optional schedule ID
+
+        Returns:
+            Created Run instance
+        """
+        from datetime import datetime, timezone
+
+        build_name = f"scheduled-{run_type}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+
+        run = Run(
+            model_id=model_id,
+            build_name=build_name,
+            run_type=run_type,
+            status="running",
+            config={"schedule_id": schedule_id} if schedule_id else {},
+            started_at=datetime.now(timezone.utc),
+        )
+        self.db.add(run)
+        self.db.commit()
+        self.db.refresh(run)
+
+        # Invalidate cache after successful commit
+        self._invalidate_run_cache(str(run.id), str(model_id))
+
+        return run
+
+    def complete_run(self, run_id: str, output: str = None) -> Run:
+        """
+        Mark a run as completed.
+
+        Args:
+            run_id: Run ID
+            output: Optional output data
+
+        Returns:
+            Updated Run instance
+        """
+        from datetime import datetime, timezone
+
+        run = self.db.get(Run, run_id)
+        if run:
+            run.status = "completed"
+            run.completed_at = datetime.now(timezone.utc)
+            if run.started_at:
+                run.duration_seconds = (run.completed_at - run.started_at).total_seconds()
+            self.db.commit()
+            self.db.refresh(run)
+
+            # Invalidate cache after successful commit
+            self._invalidate_run_cache(run_id, str(run.model_id) if run.model_id else None)
+
+        return run

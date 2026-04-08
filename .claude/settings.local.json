@@ -44,7 +44,9 @@
       "Bash(python -m pytest tests/test_websocket.py -v --tb=short)",
       "Bash(python -m pytest tests/ -v --tb=short)",
       "Bash(git checkout:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }

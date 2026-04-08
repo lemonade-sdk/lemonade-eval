@@ -48,6 +48,16 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     api_key_prefix: str = "ledash_"
 
+    # CLI Integration Security
+    cli_secret: str = Field(
+        default_factory=lambda: os.environ.get("CLI_SECRET", "dev-cli-secret-change-in-production"),
+        description="Shared secret for CLI signature verification - MUST be set in production",
+    )
+    cli_signature_enabled: bool = Field(
+        default=True,
+        description="Enable/disable CLI signature verification (disable for development)",
+    )
+
     @field_validator("secret_key")
     @classmethod
     def validate_secret_key(cls, v):
@@ -87,6 +97,14 @@ class Settings(BaseSettings):
 
     # File storage
     cache_dir: Optional[str] = None  # Default lemonade cache directory
+
+    # Redis (for caching and rate limiting)
+    redis_url: str = "redis://localhost:6379/0"
+
+    # Rate limiting
+    rate_limit_enabled: bool = True
+    rate_limit_default: int = 100  # requests per minute
+    rate_limit_burst: int = 200  # max burst requests
 
     # Pagination
     default_page_size: int = 20

@@ -1,5 +1,8 @@
 """
 Model service for business logic related to ML models.
+
+Includes automatic cache invalidation after mutations to ensure
+cache consistency with database state.
 """
 
 from typing import Optional
@@ -18,8 +21,41 @@ from app.schemas import ModelCreate, ModelUpdate, ModelResponse, PaginationMeta
 class ModelService:
     """Service class for model operations."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, cache_service=None):
+        """
+        Initialize model service.
+
+        Args:
+            db: Database session
+            cache_service: Optional CacheService instance for auto-invalidation
+        """
         self.db = db
+        self.cache_service = cache_service
+
+    def _invalidate_model_cache(self, model_id: Optional[str] = None) -> None:
+        """
+        Invalidate cache entries related to models.
+
+        Args:
+            model_id: Optional model ID for specific invalidation
+        """
+        if self.cache_service is None:
+            return
+
+        try:
+            from app.cache import get_cache_manager
+
+            cache = get_cache_manager()
+            if cache and cache.connect():
+                # Invalidate model list caches
+                cache.invalidate_prefix("cache:models")
+
+                # Invalidate specific model if ID provided
+                if model_id:
+                    cache.delete(f"cache:models:{model_id}")
+        except Exception as e:
+            # Log but don't fail the operation if cache invalidation fails
+            pass
 
     def get_models(
         self,
@@ -138,6 +174,9 @@ class ModelService:
             self.db.commit()
             self.db.refresh(model)
 
+            # Invalidate cache after successful commit
+            self._invalidate_model_cache(str(model.id))
+
             return ModelResponse.model_validate(model)
         except IntegrityError as e:
             self.db.rollback()
@@ -180,6 +219,9 @@ class ModelService:
             self.db.commit()
             self.db.refresh(model)
 
+            # Invalidate cache after successful commit
+            self._invalidate_model_cache(str(model.id))
+
             return ModelResponse.model_validate(model)
         except SQLAlchemyError as e:
             self.db.rollback()
@@ -207,6 +249,10 @@ class ModelService:
 
             self.db.delete(model)
             self.db.commit()
+
+            # Invalidate cache after successful commit
+            self._invalidate_model_cache(model_id)
+
             return True
         except SQLAlchemyError as e:
             self.db.rollback()
@@ -265,3 +311,60 @@ class ModelService:
         query = select(Model.family).distinct().where(Model.family.isnot(None))
         results = self.db.execute(query).scalars().all()
         return [f for f in results if f]
+
+    async def get_or_create_by_checkpoint(
+        self,
+        checkpoint: str,
+        model_type: str = "llm",
+    ) -> Model:
+        """
+        Get existing model by checkpoint or create new one.
+
+        Args:
+            checkpoint: Model checkpoint string
+            model_type: Type of model (llm, vlm, embedding)
+
+        Returns:
+            Existing or newly created Model instance
+        """
+        # Try to find existing model
+        query = select(Model).where(Model.checkpoint == checkpoint)
+        model = self.db.execute(query).scalar_one_or_none()
+
+        if model:
+            return model
+
+        # Extract model name from checkpoint
+        name = checkpoint.split("/")[-1] if "/" in checkpoint else checkpoint
+
+        # Determine family from checkpoint
+        family = None
+        checkpoint_lower = checkpoint.lower()
+        family_keywords = {
+            "Llama": "llama",
+            "Qwen": "qwen",
+            "Phi": "phi",
+            "Mistral": "mistral",
+            "Gemma": "gemma",
+        }
+        for fam, keyword in family_keywords.items():
+            if keyword in checkpoint_lower:
+                family = fam
+                break
+
+        # Create new model
+        model = Model(
+            name=name,
+            checkpoint=checkpoint,
+            model_type=model_type,
+            family=family,
+            model_metadata={},
+        )
+        self.db.add(model)
+        self.db.commit()
+        self.db.refresh(model)
+
+        # Invalidate cache after successful commit
+        self._invalidate_model_cache(str(model.id))
+
+        return model

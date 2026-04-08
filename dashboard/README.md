@@ -11,6 +11,8 @@ The Lemonade Eval Dashboard provides a centralized platform for:
 - **Visualizing** performance and accuracy metrics
 - **Comparing** different model configurations
 - **Tracking** evaluation history and trends
+- **Automating** evaluation pipelines with scheduled runs
+- **Monitoring** real-time evaluation progress via WebSocket
 
 ## Tech Stack
 
@@ -18,8 +20,11 @@ The Lemonade Eval Dashboard provides a centralized platform for:
 - **FastAPI** - Modern Python web framework
 - **SQLAlchemy** - Database ORM
 - **PostgreSQL** - Primary database
+- **Redis** - Caching and rate limiting
 - **JWT** - Authentication with secure token management
 - **Pydantic** - Data validation
+- **Prometheus** - Metrics and monitoring
+- **Celery** - Background task processing
 
 ### Frontend
 - **React 18** - UI library
@@ -38,6 +43,7 @@ The Lemonade Eval Dashboard provides a centralized platform for:
 - Node.js 18+ and npm
 - Python 3.11+
 - PostgreSQL 14+
+- Redis 7+ (for caching and rate limiting)
 
 ### 1. Clone the Repository
 
@@ -87,12 +93,168 @@ npm run dev
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
 - **API Docs**: http://localhost:8000/docs
+- **Metrics**: http://localhost:8000/metrics
 
 ## Documentation
 
 - [Setup Guide](./SETUP.md) - Detailed setup instructions
 - [API Documentation](http://localhost:8000/docs) - Interactive API docs
 - [Environment Variables](./.env.example) - Configuration reference
+
+## CLI Integration
+
+The dashboard integrates directly with the `lemonade-eval` CLI for seamless evaluation result upload.
+
+### Direct Upload from CLI
+
+```bash
+# Run evaluation and upload to dashboard
+lemonade-eval --input meta-llama/Llama-3.2-1B-Instruct \
+    --dashboard-url http://localhost:8000 \
+    --dashboard-api-key your-api-key \
+    ServerBench
+```
+
+### Using the Integration Script
+
+```bash
+# Upload existing YAML results
+python scripts/lemonade_dashboard_integration.py \
+    --dashboard-url http://localhost:8000 \
+    --api-key your-api-key \
+    --yaml-path ~/.cache/lemonade/builds/my-run/lemonade_stats.yaml
+```
+
+### API Upload
+
+```bash
+# Upload evaluation via API
+curl -X POST http://localhost:8000/api/v1/import/evaluation \
+    -H "Authorization: Bearer your-api-key" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "model_id": "meta-llama/Llama-3.2-1B-Instruct",
+        "run_type": "benchmark",
+        "build_name": "my-evaluation-run",
+        "metrics": [
+            {"name": "seconds_to_first_token", "value": 0.025, "unit": "seconds"}
+        ],
+        "status": "completed"
+    }'
+```
+
+## Production Deployment
+
+### Docker Compose (Production)
+
+```bash
+cd docker/production
+
+# Set environment variables
+export DB_PASSWORD=$(openssl rand -base64 32)
+export SECRET_KEY=$(openssl rand -base64 32)
+
+# Start all services
+docker-compose up -d
+
+# Access services
+# Dashboard: http://localhost
+# Grafana: http://localhost:3001
+# Prometheus: http://localhost:9090
+```
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection URL | - |
+| `REDIS_URL` | Redis connection URL | `redis://localhost:6379/0` |
+| `SECRET_KEY` | JWT secret key (32+ chars) | - |
+| `CORS_ORIGINS` | Allowed CORS origins | `http://localhost:3000` |
+| `RATE_LIMIT_ENABLED` | Enable rate limiting | `true` |
+| `RATE_LIMIT_DEFAULT` | Default rate limit (req/min) | `100` |
+
+### Production Checklist
+
+- [ ] Set strong `SECRET_KEY` (minimum 32 characters)
+- [ ] Configure `DATABASE_URL` for PostgreSQL
+- [ ] Configure `REDIS_URL` for Redis
+- [ ] Set up SSL certificates for HTTPS
+- [ ] Configure `CORS_ORIGINS` for production domains
+- [ ] Enable rate limiting
+- [ ] Set up monitoring (Prometheus + Grafana)
+- [ ] Configure backup strategy
+
+## Monitoring Setup
+
+### Prometheus Metrics
+
+The dashboard exposes Prometheus metrics at `/metrics`:
+
+- `http_requests_total` - Total HTTP requests
+- `http_request_duration_seconds` - Request latency histogram
+- `db_connections_active` - Active database connections
+- `websocket_connections_total` - Active WebSocket connections
+- `import_jobs_total` - Import job count
+- `evaluation_runs_total` - Evaluation run count
+
+### Grafana Dashboards
+
+Import the provided Grafana configuration for pre-built dashboards:
+
+1. Access Grafana at http://localhost:3001
+2. Login with admin/admin (change password!)
+3. Go to Configuration -> Data Sources
+4. Add Prometheus data source (URL: http://prometheus:9090)
+5. Import dashboards from `grafana/provisioning/dashboards/`
+
+### Alerts
+
+Configure alerts in Prometheus for:
+- High error rates (> 1%)
+- High response latency (p95 > 500ms)
+- Database connection pool exhaustion
+- Redis connection failures
+
+## Automation Pipeline
+
+### Scheduled Evaluations
+
+Run evaluations on a schedule using Celery beat:
+
+```bash
+# Start Celery worker
+celery -A app.services.scheduler worker --loglevel=info
+
+# Start Celery beat
+celery -A app.services.scheduler beat --loglevel=info
+```
+
+### Trend Analysis
+
+Analyze evaluation trends and detect anomalies:
+
+```bash
+python scripts/check_trends.py \
+    --model-id meta-llama/Llama-3.2-1B-Instruct \
+    --metric token_generation_tokens_per_second \
+    --days 30 \
+    --dashboard-url http://localhost:8000 \
+    --api-key your-api-key
+```
+
+### Notifications
+
+Send evaluation completion notifications:
+
+```bash
+python scripts/send_notifications.py \
+    --event evaluation_complete \
+    --recipient user@example.com \
+    --data '{"run_id": "123", "model_name": "Llama-3.2-1B", "status": "completed"}' \
+    --smtp-host smtp.example.com \
+    --slack-webhook https://hooks.slack.com/xxx
+```
 
 ## Features
 
@@ -101,6 +263,7 @@ npm run dev
 - Secure token storage in sessionStorage
 - Automatic token refresh
 - Role-based access control (admin, editor, viewer)
+- API key support for CLI integration
 
 ### Model Management
 - Create and manage LLM/VLM models
@@ -118,10 +281,18 @@ npm run dev
 - Interactive charts and tables
 - Export capabilities
 
-### Error Handling
-- User-friendly error messages
-- Error codes for support
-- Copy-to-clipboard for error details
+### CLI Integration
+- Direct upload from `lemonade-eval` CLI
+- Bulk import from YAML files
+- Real-time progress reporting
+- Offline queue for failed uploads
+
+### Production Features
+- Rate limiting (Redis-based)
+- Request caching (Redis)
+- Prometheus metrics
+- Health check endpoints
+- Background job processing (Celery)
 
 ## Project Structure
 
@@ -131,34 +302,46 @@ dashboard/
 │   ├── app/
 │   │   ├── api/
 │   │   │   ├── v1/
-│   │   │   │   ├── auth.py      # Authentication endpoints
-│   │   │   │   ├── models.py    # Model CRUD endpoints
-│   │   │   │   ├── runs.py      # Run management endpoints
-│   │   │   │   ├── metrics.py   # Metrics endpoints
-│   │   │   │   └── health.py    # Health check endpoint
-│   │   │   └── deps.py          # Auth dependencies
-│   │   ├── models/              # SQLAlchemy models
-│   │   ├── schemas/             # Pydantic schemas
-│   │   ├── main.py              # FastAPI app entry
-│   │   └── config.py            # Configuration
+│   │   │   │   ├── auth.py          # Authentication endpoints
+│   │   │   │   ├── models.py        # Model CRUD endpoints
+│   │   │   │   ├── runs.py          # Run management endpoints
+│   │   │   │   ├── metrics.py       # Metrics endpoints
+│   │   │   │   ├── health.py        # Health check endpoint
+│   │   │   │   └── cli_integration.py  # CLI integration endpoints
+│   │   │   └── deps.py              # Auth dependencies
+│   │   ├── middleware/
+│   │   │   └── rate_limiter.py      # Rate limiting middleware
+│   │   ├── monitoring/
+│   │   │   └── metrics.py           # Prometheus metrics
+│   │   ├── cache/
+│   │   │   ├── cache_manager.py     # Redis cache manager
+│   │   │   └── cache_service.py     # Cache service
+│   │   ├── integration/
+│   │   │   ├── cli_client.py        # CLI client
+│   │   │   └── import_pipeline.py   # Import pipeline
+│   │   ├── models/                  # SQLAlchemy models
+│   │   ├── schemas/                 # Pydantic schemas
+│   │   ├── services/                # Business logic
+│   │   ├── main.py                  # FastAPI app entry
+│   │   └── config.py                # Configuration
 │   ├── tests/
+│   │   ├── test_api.py              # API tests
+│   │   └── test_cli_integration.py  # CLI integration tests
 │   └── requirements.txt
+├── docker/production/
+│   ├── docker-compose.yml           # Production deployment
+│   ├── nginx.conf                   # Nginx configuration
+│   └── prometheus.yml               # Prometheus config
+├── scripts/
+│   ├── lemonade_dashboard_integration.py  # CLI integration script
+│   ├── run_scheduled_eval.py        # Scheduled evaluations
+│   ├── check_trends.py              # Trend analysis
+│   └── send_notifications.py        # Notifications
 ├── frontend/
-│   ├── src/
-│   │   ├── api/
-│   │   │   ├── auth.ts          # Auth API methods
-│   │   │   ├── client.ts        # Axios configuration
-│   │   │   └── index.ts         # API exports
-│   │   ├── components/          # React components
-│   │   ├── pages/               # Page components
-│   │   ├── stores/              # Zustand stores
-│   │   ├── types/               # TypeScript types
-│   │   └── utils/               # Utility functions
-│   ├── tests/
-│   └── package.json
-├── .env.example                  # Environment template
-├── SETUP.md                      # Setup guide
-└── README.md                     # This file
+│   └── ...                          # React frontend
+├── .env.example                      # Environment template
+├── SETUP.md                          # Setup guide
+└── README.md                         # This file
 ```
 
 ## API Endpoints
@@ -189,6 +372,15 @@ dashboard/
 | PUT | `/api/v1/runs/{id}` | Update run |
 | GET | `/api/v1/runs/stats` | Get run statistics |
 
+### CLI Integration
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/import/evaluation` | Import evaluation from CLI |
+| POST | `/api/v1/import/bulk` | Bulk import evaluations |
+| POST | `/api/v1/import/yaml` | Import YAML data |
+| GET | `/api/v1/import/status/{run_id}` | Get import status |
+| WebSocket | `/ws/v1/evaluation-progress` | Real-time progress |
+
 ### Metrics
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -196,6 +388,13 @@ dashboard/
 | POST | `/api/v1/metrics` | Create metric |
 | GET | `/api/v1/metrics/{run_id}` | Get run metrics |
 | GET | `/api/v1/metrics/trend` | Get metric trends |
+
+### Monitoring
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/metrics` | Prometheus metrics |
+| GET | `/health/live` | Liveness check |
+| GET | `/health/ready` | Readiness check |
 
 ## Development
 
