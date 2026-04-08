@@ -1,0 +1,367 @@
+{
+  "name": "Weekly Monthly Report Generation",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "dayOfWeek",
+              "dayOfWeek": [1]
+            },
+            {
+              "field": "hour",
+              "hour": [9]
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300],
+      "notes": "Runs every Monday at 9 AM. Modify for monthly reports."
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine report type and date range\nconst now = new Date();\nconst isMonthly = $input.first()?.json?.report_type === 'monthly' || \n                  now.getDate() <= 7; // First week = monthly report\n\nconst reportType = isMonthly ? 'monthly' : 'weekly';\n\n// Calculate date ranges\nlet dateFrom, dateTo, reportName;\n\nif (reportType === 'weekly') {\n  // Last 7 days\n  dateTo = new Date(now);\n  dateFrom = new Date(now);\n  dateFrom.setDate(dateFrom.getDate() - 7);\n  reportName = `Weekly Report - ${dateFrom.toLocaleDateString()} to ${dateTo.toLocaleDateString()}`;\n} else {\n  // Previous month\n  dateTo = new Date(now.getFullYear(), now.getMonth(), 0);\n  dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1);\n  reportName = `Monthly Report - ${dateFrom.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;\n}\n\nreturn {\n  json: {\n    report_type: reportType,\n    report_name: reportName,\n    date_from: dateFrom.toISOString(),\n    date_to: dateTo.toISOString(),\n    generated_at: now.toISOString(),\n    recipients: [\n      'team@lemonade.ai',\n      'engineering@lemonade.ai'\n    ].filter(Boolean)\n  }\n};"
+      },
+      "id": "determine-report-type",
+      "name": "Determine Report Type",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/runs/stats",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-run-stats",
+      "name": "Fetch Run Stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "500"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-recent-runs",
+      "name": "Fetch Recent Runs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/models",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-models",
+      "name": "Fetch Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 600]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/metrics/aggregate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-aggregate-metrics",
+      "name": "Fetch Aggregate Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate all report data\nconst runStats = $node[\"Fetch Run Stats\"].json?.data || {};\nconst runs = ($node[\"Fetch Recent Runs\"].json?.data || []).filter(r => {\n  const runDate = new Date(r.created_at);\n  const dateFrom = new Date($node[\"Determine Report Type\"].json.date_from);\n  const dateTo = new Date($node[\"Determine Report Type\"].json.date_to);\n  return runDate >= dateFrom && runDate <= dateTo;\n});\nconst models = $node[\"Fetch Models\"].json?.data || [];\nconst aggregateMetrics = $node[\"Fetch Aggregate Metrics\"].json?.data || [];\n\n// Calculate summary statistics\nconst totalRuns = runs.length;\nconst completedRuns = runs.filter(r => r.status === 'completed').length;\nconst failedRuns = runs.filter(r => r.status === 'failed').length;\nconst successRate = totalRuns > 0 ? (completedRuns / totalRuns * 100).toFixed(1) : 0;\n\n// Group runs by type\nconst runsByType = runs.reduce((acc, r) => {\n  acc[r.run_type] = (acc[r.run_type] || 0) + 1;\n  return acc;\n}, {});\n\n// Group runs by status\nconst runsByStatus = runs.reduce((acc, r) => {\n  acc[r.status] = (acc[r.status] || 0) + 1;\n  return acc;\n}, {});\n\n// Group runs by device\nconst runsByDevice = runs.reduce((acc, r) => {\n  acc[r.device || 'unknown'] = (acc[r.device || 'unknown'] || 0) + 1;\n  return acc;\n}, {});\n\n// Calculate average duration\nconst avgDuration = runs.filter(r => r.duration_seconds)\n  .reduce((acc, r) => acc + r.duration_seconds, 0) / (runs.filter(r => r.duration_seconds).length || 1);\n\n// Top models by runs\nconst modelRunCounts = runs.reduce((acc, r) => {\n  const modelName = r.model?.name || 'Unknown';\n  acc[modelName] = (acc[modelName] || 0) + 1;\n  return acc;\n}, {});\nconst topModels = Object.entries(modelRunCounts)\n  .sort((a, b) => b[1] - a[1])\n  .slice(0, 5)\n  .map(([name, count]) => ({ name, count }));\n\n// Performance summary from aggregate metrics\nconst performanceSummary = aggregateMetrics\n  .filter(m => m.category === 'performance')\n  .map(m => ({\n    name: m.name,\n    mean: m.mean?.toFixed(2),\n    unit: m.unit,\n    min: m.min?.toFixed(2),\n    max: m.max?.toFixed(2)\n  }));\n\nreturn {\n  json: {\n    report_data: {\n      title: $node[\"Determine Report Type\"].json.report_name,\n      report_type: $node[\"Determine Report Type\"].json.report_type,\n      period: {\n        from: $node[\"Determine Report Type\"].json.date_from,\n        to: $node[\"Determine Report Type\"].json.date_to\n      },\n      generated_at: $node[\"Determine Report Type\"].json.generated_at,\n      summary: {\n        total_runs: totalRuns,\n        completed_runs: completedRuns,\n        failed_runs: failedRuns,\n        success_rate: `${successRate}%`,\n        average_duration_seconds: Math.round(avgDuration),\n        total_models: models.length,\n        unique_checkpoints: new Set(runs.map(r => r.build_name)).size\n      },\n      runs_by_type: runsByType,\n      runs_by_status: runsByStatus,\n      runs_by_device: runsByDevice,\n      top_models: topModels,\n      performance_metrics: performanceSummary,\n      run_stats: runStats\n    }\n  }\n};"
+      },
+      "id": "aggregate-report-data",
+      "name": "Aggregate Report Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate HTML report\nconst data = $input.first().json.report_data;\n\nconst typeDistribution = Object.entries(data.runs_by_type)\n  .map(([type, count]) => `<tr><td>${type}</td><td>${count}</td></tr>`)\n  .join('');\n\nconst statusDistribution = Object.entries(data.runs_by_status)\n  .map(([status, count]) => `<tr><td><span style=\"padding: 4px 8px; border-radius: 4px; background: ${status === 'completed' ? '#28a745' : status === 'failed' ? '#dc3545' : '#ffc107'}; color: white;\">${status}</span></td><td>${count}</td></tr>`)\n  .join('');\n\nconst topModelsList = data.top_models\n  .map((m, i) => `<tr><td>${i + 1}</td><td>${m.name}</td><td>${m.count} runs</td></tr>`)\n  .join('');\n\nconst perfMetricsList = data.performance_metrics\n  .map(m => `<tr><td>${m.name}</td><td>${m.mean}</td><td>${m.unit}</td><td>${m.min} - ${m.max}</td></tr>`)\n  .join('');\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background: #f5f5f5; }\n    .container { max-width: 900px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }\n    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px; text-align: center; }\n    .header h1 { margin: 0; font-size: 28px; }\n    .header p { margin: 10px 0 0; opacity: 0.9; }\n    .content { padding: 40px; }\n    .section { margin-bottom: 30px; }\n    .section h2 { color: #667eea; border-bottom: 2px solid #667eea; padding-bottom: 10px; margin-top: 0; }\n    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin: 20px 0; }\n    .stat-card { background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; border-left: 4px solid #667eea; }\n    .stat-value { font-size: 32px; font-weight: bold; color: #667eea; }\n    .stat-label { font-size: 14px; color: #666; margin-top: 5px; text-transform: uppercase; }\n    table { width: 100%; border-collapse: collapse; margin: 15px 0; }\n    th { background: #343a40; color: white; padding: 12px; text-align: left; }\n    td { padding: 12px; border-bottom: 1px solid #dee2e6; }\n    tr:nth-child(even) { background: #f8f9fa; }\n    tr:hover { background: #e9ecef; }\n    .footer { background: #343a40; color: white; padding: 20px; text-align: center; font-size: 12px; }\n    .chart-placeholder { background: #f8f9fa; padding: 40px; text-align: center; border-radius: 8px; margin: 20px 0; color: #666; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>📊 ${data.title}</h1>\n      <p>Generated: ${new Date(data.generated_at).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>\n    </div>\n    \n    <div class=\"content\">\n      <div class=\"section\">\n        <h2>Executive Summary</h2>\n        <div class=\"stats-grid\">\n          <div class=\"stat-card\">\n            <div class=\"stat-value\">${data.summary.total_runs}</div>\n            <div class=\"stat-label\">Total Runs</div>\n          </div>\n          <div class=\"stat-card\">\n            <div class=\"stat-value\">${data.summary.success_rate}</div>\n            <div class=\"stat-label\">Success Rate</div>\n          </div>\n          <div class=\"stat-card\">\n            <div class=\"stat-value\">${data.summary.completed_runs}</div>\n            <div class=\"stat-label\">Completed</div>\n          </div>\n          <div class=\"stat-card\">\n            <div class=\"stat-value\">${Math.round(data.summary.average_duration_seconds / 60)}m</div>\n            <div class=\"stat-label\">Avg Duration</div>\n          </div>\n          <div class=\"stat-card\">\n            <div class=\"stat-value\">${data.summary.total_models}</div>\n            <div class=\"stat-label\">Models Tested</div>\n          </div>\n          <div class=\"stat-card\">\n            <div class=\"stat-value\">${data.summary.unique_checkpoints}</div>\n            <div class=\"stat-label\">Unique Builds</div>\n          </div>\n        </div>\n      </div>\n      \n      <div class=\"section\">\n        <h2>Runs by Type</h2>\n        <table>\n          <thead>\n            <tr><th>Evaluation Type</th><th>Count</th></tr>\n          </thead>\n          <tbody>\n            ${typeDistribution || '<tr><td colspan=\"2\">No data available</td></tr>'}\n          </tbody>\n        </table>\n      </div>\n      \n      <div class=\"section\">\n        <h2>Success/Failure Distribution</h2>\n        <table>\n          <thead>\n            <tr><th>Status</th><th>Count</th></tr>\n          </thead>\n          <tbody>\n            ${statusDistribution || '<tr><td colspan=\"2\">No data available</td></tr>'}\n          </tbody>\n        </table>\n      </div>\n      \n      <div class=\"section\">\n        <h2>Top Models</h2>\n        <table>\n          <thead>\n            <tr><th>#</th><th>Model Name</th><th>Activity</th></tr>\n          </thead>\n          <tbody>\n            ${topModelsList || '<tr><td colspan=\"3\">No data available</td></tr>'}\n          </tbody>\n        </table>\n      </div>\n      \n      <div class=\"section\">\n        <h2>Performance Metrics Summary</h2>\n        <table>\n          <thead>\n            <tr><th>Metric</th><th>Average</th><th>Unit</th><th>Range</th></tr>\n          </thead>\n          <tbody>\n            ${perfMetricsList || '<tr><td colspan=\"4\">No performance data available</td></tr>'}\n          </tbody>\n        </table>\n      </div>\n      \n      <div class=\"section\">\n        <h2>Access Full Report</h2>\n        <p style=\"background: #e7f3ff; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff;\">\n          <a href=\"${$env.DASHBOARD_FRONTEND_URL || 'http://localhost:3000'}/reports\" style=\"color: #007bff; text-decoration: none; font-weight: bold;\">View interactive dashboard</a> for detailed analytics, trend charts, and model comparisons.\n        </p>\n      </div>\n    </div>\n    \n    <div class=\"footer\">\n      <p>Lemonade Eval Dashboard | Automated Report Generation</p>\n      <p>For questions, contact: team@lemonade.ai</p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn { json: { html, text: `${data.title} - ${data.summary.total_runs} runs, ${data.summary.success_rate} success rate` } };"
+      },
+      "id": "generate-html-report",
+      "name": "Generate HTML Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SMTP_API_URL || 'https://api.sendgrid.com/v3/mail/send' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"personalizations\": [\n    {\n      \"to\": [\n        { \"email\": \"{{ $node['Determine Report Type'].json.recipients[0] }}\" },\n        { \"email\": \"{{ $node['Determine Report Type'].json.recipients[1] }}\" }\n      ],\n      \"subject\": \"📊 {{ $node['Determine Report Type'].json.report_name }}\"\n    }\n  ],\n  \"from\": {\n    \"email\": \"{{ $env.EMAIL_FROM_ADDRESS || 'reports@lemonade.ai' }}\",\n    \"name\": \"Lemonade Reports\"\n  },\n  \"content\": [\n    {\n      \"type\": \"text/html\",\n      \"value\": \"{{ $json.html }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "send-report-email",
+      "name": "Send Report Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 300],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3,
+        "retryInterval": 10000
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"📊 {{ $node['Determine Report Type'].json.report_name }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"📊 {{ $node['Determine Report Type'].json.report_name }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        { \"type\": \"mrkdwn\", \"text\": \"*Total Runs:*\\n{{ $node['Aggregate Report Data'].json.report_data.summary.total_runs }}\" },\n        { \"type\": \"mrkdwn\", \"text\": \"*Success Rate:*\\n{{ $node['Aggregate Report Data'].json.report_data.summary.success_rate }}\" },\n        { \"type\": \"mrkdwn\", \"text\": \"*Models Tested:*\\n{{ $node['Aggregate Report Data'].json.report_data.summary.total_models }}\" },\n        { \"type\": \"mrkdwn\", \"text\": \"*Avg Duration:*\\n{{ Math.round($node['Aggregate Report Data'].json.report_data.summary.average_duration_seconds / 60) }}m\" }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"<{{ $env.DASHBOARD_FRONTEND_URL || 'http://localhost:3000' }}/reports|View Full Report>\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "send-slack-summary",
+      "name": "Send Slack Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/reports",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "report_type",
+              "value": "={{ $node['Determine Report Type'].json.report_type }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $node['Determine Report Type'].json.report_name }}"
+            },
+            {
+              "name": "period_from",
+              "value": "={{ $node['Determine Report Type'].json.date_from }}"
+            },
+            {
+              "name": "period_to",
+              "value": "={{ $node['Determine Report Type'].json.date_to }}"
+            },
+            {
+              "name": "data",
+              "value": "={{ JSON.stringify($node['Aggregate Report Data'].json.report_data) }}"
+            },
+            {
+              "name": "generated_by",
+              "value": "n8n-automation"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-report",
+      "name": "Store Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  json: {\n    status: 'success',\n    report_name: $node['Determine Report Type'].json.report_name,\n    report_type: $node['Determine Report Type'].json.report_type,\n    email_sent: !!$node['Send Report Email'].json,\n    slack_sent: !!$node['Send Slack Summary'].json,\n    stored: !!$node['Store Report'].json,\n    completed_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "final-summary",
+      "name": "Final Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Determine Report Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Report Type": {
+      "main": [
+        [
+          {
+            "node": "Fetch Run Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Run Stats": {
+      "main": [
+        [
+          {
+            "node": "Fetch Recent Runs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Recent Runs": {
+      "main": [
+        [
+          {
+            "node": "Fetch Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Models": {
+      "main": [
+        [
+          {
+            "node": "Fetch Aggregate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Aggregate Metrics": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Report Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Report Data": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Send Report Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Report Email": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Summary": {
+      "main": [
+        [
+          {
+            "node": "Store Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Report": {
+      "main": [
+        [
+          {
+            "node": "Final Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "reports"
+    },
+    {
+      "name": "scheduled"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-07T00:00:00.000Z",
+  "versionId": "reports-v1"
+}

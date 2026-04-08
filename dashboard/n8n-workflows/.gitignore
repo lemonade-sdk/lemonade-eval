@@ -1,0 +1,42 @@
+# n8n Workflows - .gitignore
+
+# Environment files (contains secrets)
+.env
+.env.local
+.env.*.local
+
+# Credential exports (contains secrets)
+credentials-export.json
+*-credentials.json
+
+# Test output
+test-results.json
+test-output/
+
+# Logs
+*.log
+logs/
+
+# n8n specific
+.n8n/
+n8n-local.db
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Build artifacts
+dist/
+build/

@@ -1,0 +1,417 @@
+{
+  "name": "Evaluation Completion Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "evaluation-complete",
+        "responseMode": "lastNode",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [0, 400],
+      "webhookId": "eval-complete-notification"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse and validate incoming webhook data\nconst inputData = $input.first()?.json || {};\n\nconst runData = inputData.run || inputData;\nconst modelData = inputData.model || {};\nconst recipientData = inputData.recipients || {};\n\nreturn {\n  json: {\n    run_id: runData.id,\n    run_type: runData.run_type || 'benchmark',\n    status: runData.status || 'completed',\n    status_message: runData.status_message || '',\n    build_name: runData.build_name || '',\n    model_id: modelData.id || runData.model_id,\n    model_name: modelData.name || 'Unknown Model',\n    model_checkpoint: modelData.checkpoint || '',\n    started_at: runData.started_at,\n    completed_at: runData.completed_at,\n    duration_seconds: runData.duration_seconds,\n    device: runData.device || '',\n    backend: runData.backend || '',\n    // Recipients\n    email_recipients: recipientData.email || [],\n    slack_channels: recipientData.slack || [],\n    teams_channels: recipientData.teams || [],\n    // Dashboard URL\n    dashboard_url: $env.DASHBOARD_FRONTEND_URL || 'http://localhost:3000',\n    run_url: `${$env.DASHBOARD_FRONTEND_URL || 'http://localhost:3000'}/runs/${runData.id}`,\n    // Timestamp\n    notification_time: new Date().toISOString()\n  }\n};"
+      },
+      "id": "parse-webhook-data",
+      "name": "Parse Webhook Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value": "={{ $json.status }}",
+              "operation": "equals",
+              "value2": "completed"
+            }
+          ]
+        }
+      },
+      "id": "check-status",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SMTP_API_URL || 'https://api.sendgrid.com/v3/mail/send' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"personalizations\": [\n    {\n      \"to\": [\n        {\n          \"email\": \"{{ $json.email_recipients[0] }}\"\n        }\n      ],\n      \"subject\": \"Evaluation Completed: {{ $json.model_name }}\"\n    }\n  ],\n  \"from\": {\n    \"email\": \"{{ $env.EMAIL_FROM_ADDRESS || 'notifications@lemonade.ai' }}\",\n    \"name\": \"Lemonade Eval Dashboard\"\n  },\n  \"content\": [\n    {\n      \"type\": \"text/html\",\n      \"value\": \"{{ $node['Format Email HTML'].json.html }}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 200],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3,
+        "retryInterval": 5000
+      },
+      "notes": "Configure SMTP/SendGrid credentials in n8n"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate HTML email body\nconst data = $input.first().json;\n\nconst statusColor = data.status === 'completed' ? '#28a745' : '#dc3545';\nconst statusIcon = data.status === 'completed' ? '✅' : '❌';\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px 10px 0 0; }\n    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }\n    .status-badge { display: inline-block; padding: 8px 16px; border-radius: 20px; background: ${statusColor}; color: white; font-weight: bold; }\n    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }\n    .metric-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }\n    .metric-label { font-size: 12px; color: #666; text-transform: uppercase; }\n    .metric-value { font-size: 18px; font-weight: bold; color: #333; margin-top: 5px; }\n    .button { display: inline-block; padding: 12px 24px; background: #667eea; color: white; text-decoration: none; border-radius: 6px; margin-top: 20px; }\n    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>${statusIcon} Evaluation ${data.status === 'completed' ? 'Completed' : 'Failed'}</h1>\n    </div>\n    <div class=\"content\">\n      <h2>${data.model_name}</h2>\n      <p><span class=\"status-badge\">${data.status.toUpperCase()}</span></p>\n      \n      <div class=\"metric-grid\">\n        <div class=\"metric-card\">\n          <div class=\"metric-label\">Run Type</div>\n          <div class=\"metric-value\">${data.run_type}</div>\n        </div>\n        <div class=\"metric-card\">\n          <div class=\"metric-label\">Build</div>\n          <div class=\"metric-value\">${data.build_name}</div>\n        </div>\n        <div class=\"metric-card\">\n          <div class=\"metric-label\">Device</div>\n          <div class=\"metric-value\">${data.device || 'N/A'}</div>\n        </div>\n        <div class=\"metric-card\">\n          <div class=\"metric-label\">Backend</div>\n          <div class=\"metric-value\">${data.backend || 'N/A'}</div>\n        </div>\n        ${data.duration_seconds ? `\n        <div class=\"metric-card\">\n          <div class=\"metric-label\">Duration</div>\n          <div class=\"metric-value\">${Math.round(data.duration_seconds)}s</div>\n        </div>\n        ` : ''}\n      </div>\n      \n      ${data.status_message ? `<p><strong>Status:</strong> ${data.status_message}</p>` : ''}\n      \n      <a href=\"${data.run_url}\" class=\"button\">View Results</a>\n      \n      <div class=\"footer\">\n        <p>Lemonade Eval Dashboard | <a href=\"${data.dashboard_url}\">Open Dashboard</a></p>\n        <p>Notification sent at: ${new Date(data.notification_time).toLocaleString()}</p>\n      </div>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn { json: { html, text: `Evaluation ${data.status} for ${data.model_name}. View: ${data.run_url}` } };"
+      },
+      "id": "format-email-html",
+      "name": "Format Email HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [550, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"Evaluation {{ $json.status === 'completed' ? 'Completed' : 'Failed' }}: {{ $json.model_name }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"{{ $json.status === 'completed' ? '✅' : '❌' }} Evaluation {{ $json.status === 'completed' ? 'Completed' : 'Failed' }}\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Model:*\\n{{ $json.model_name }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Run Type:*\\n{{ $json.run_type }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Status:*\\n{{ $json.status }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Build:*\\n{{ $json.build_name }}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"<{{ $json.run_url }}|View Results in Dashboard>\"\n      }\n    },\n    {\n      \"type\": \"context\",\n      \"elements\": [\n        {\n          \"type\": \"plain_text\",\n          \"text\": \"Lemonade Eval Dashboard | {{ DateTime.now().setLocale('en-US').toFormat('MMM dd, yyyy HH:mm') }}\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "send-slack",
+      "name": "Send Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 400],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3,
+        "retryInterval": 3000
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"{{ $json.status === 'completed' ? '0076D7' : 'FF0000' }}\",\n  \"summary\": \"Evaluation {{ $json.status }} for {{ $json.model_name }}\",\n  \"sections\": [\n    {\n      \"activityTitle\": \"{{ $json.status === 'completed' ? '✅' : '❌' }} Evaluation {{ $json.status === 'completed' ? 'Completed' : 'Failed' }}\",\n      \"activitySubtitle\": \"Lemonade Eval Dashboard\",\n      \"facts\": [\n        { \"name\": \"Model\", \"value\": \"{{ $json.model_name }}\" },\n        { \"name\": \"Run Type\", \"value\": \"{{ $json.run_type }}\" },\n        { \"name\": \"Status\", \"value\": \"{{ $json.status }}\" },\n        { \"name\": \"Build\", \"value\": \"{{ $json.build_name }}\" },\n        { \"name\": \"Device\", \"value\": \"{{ $json.device || 'N/A' }}\" },\n        { \"name\": \"Backend\", \"value\": \"{{ $json.backend || 'N/A' }}\" }\n      ],\n      \"potentialAction\": [\n        {\n          \"@type\": \"OpenUri\",\n          \"name\": \"View Results\",\n          \"targets\": [{ \"os\": \"default\", \"uri\": \"{{ $json.run_url }}\" }]\n        }\n      ]\n    }\n  ]\n}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "id": "send-teams",
+      "name": "Send Teams",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 600],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3,
+        "retryInterval": 3000
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate notification results\nconst emailResult = $node[\"Send Email\"]?.json;\nconst slackResult = $node[\"Send Slack\"]?.json;\nconst teamsResult = $node[\"Send Teams\"]?.json;\n\nreturn {\n  json: {\n    notification_summary: {\n      run_id: $input.first().json.run_id,\n      model_name: $input.first().json.model_name,\n      status: $input.first().json.status,\n      email_sent: emailResult ? true : false,\n      slack_sent: slackResult ? true : false,\n      teams_sent: teamsResult ? true : false,\n      timestamp: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/notifications/log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "run_id",
+              "value": "={{ $json.notification_summary.run_id }}"
+            },
+            {
+              "name": "notification_type",
+              "value": "evaluation_complete"
+            },
+            {
+              "name": "channels",
+              "value": "={\n  \"email\": {{ $json.notification_summary.email_sent }},\n  \"slack\": {{ $json.notification_summary.slack_sent }},\n  \"teams\": {{ $json.notification_summary.teams_sent }}\n}"
+            },
+            {
+              "name": "sent_at",
+              "value": "={{ $json.notification_summary.timestamp }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-notification",
+      "name": "Log Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"⚠️ Evaluation Failed: {{ $json.model_name }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"❌ Evaluation Failed\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Model:*\\n{{ $json.model_name }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Run Type:*\\n{{ $json.run_type }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Error:*\\n{{ $json.status_message || 'Unknown error' }}\"\n        }\n      ]\n    },\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"<{{ $json.run_url }}|View Details>\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "send-failure-slack",
+      "name": "Send Failure Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value": "={{ $env.SLACK_WEBHOOK_URL }}",
+              "operation": "exists"
+            }
+          ]
+        }
+      },
+      "id": "check-slack-configured",
+      "name": "Check Slack Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [880, 600]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value": "={{ $env.TEAMS_WEBHOOK_URL }}",
+              "operation": "exists"
+            }
+          ]
+        }
+      },
+      "id": "check-teams-configured",
+      "name": "Check Teams Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [880, 800]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value": "={{ $json.email_recipients.length > 0 }}",
+              "operation": "equal",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-email-configured",
+      "name": "Check Email Configured",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [550, 100]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Webhook Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Webhook Data": {
+      "main": [
+        [
+          {
+            "node": "Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status": {
+      "main": [
+        [
+          {
+            "node": "Check Email Configured",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Failure Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Email Configured": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Slack Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Email HTML": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Check Slack Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Slack Configured": {
+      "main": [
+        [
+          {
+            "node": "Send Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Teams Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack": {
+      "main": [
+        [
+          {
+            "node": "Check Teams Configured",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Teams Configured": {
+      "main": [
+        [
+          {
+            "node": "Send Teams",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Teams": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Log Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Failure Slack": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "notifications"
+    },
+    {
+      "name": "evaluations"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-07T00:00:00.000Z",
+  "versionId": "notifications-v1"
+}
