@@ -3,7 +3,7 @@
  */
 
 import apiClient from './client';
-import type { User, APIResponse } from '@/types';
+import type { User } from '@/types';
 
 const BASE_PATH = '/api/v1/auth';
 
@@ -47,16 +47,16 @@ export const authApi = {
    * POST /api/v1/auth/login
    */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const { data } = await apiClient.post<APIResponse<LoginResponse>>(
+    const { data } = await apiClient.post<LoginResponse>(
       `${BASE_PATH}/login`,
       credentials
     );
 
-    if (!data.success || !data.data) {
-      throw new Error(data.errors?.[0]?.message || 'Login failed');
+    if (!data.access_token) {
+      throw new Error('Login failed');
     }
 
-    return data.data;
+    return data;
   },
 
   /**

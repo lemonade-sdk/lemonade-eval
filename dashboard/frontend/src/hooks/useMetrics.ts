@@ -24,6 +24,7 @@ export function useMetrics(params?: ListMetricsParams) {
   const query = useQuery({
     queryKey: QUERY_KEYS.metrics.list(params || {}),
     queryFn: () => metricsApi.listMetrics(params),
+    enabled: params !== undefined,
   });
 
   return {
@@ -76,12 +77,12 @@ export function useCreateMetricsBulk() {
 
   return useMutation({
     mutationFn: (metrics: MetricCreate[]) => metricsApi.createMetricsBulk(metrics),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.metrics.all });
       addNotification({
         type: 'success',
         title: 'Metrics created',
-        message: `${metrics.length} metrics were created successfully`,
+        message: `${variables.length} metrics were created successfully`,
       });
     },
     onError: (error: Error) => {
@@ -135,11 +136,11 @@ export function useAggregateMetrics(params?: {
   };
 }
 
-export function useMetricTrends(modelId: string, metricName: string, limit = 100) {
+export function useMetricTrends(modelId: string, metricName: string, limit = 100, enabled = true) {
   const query = useQuery({
     queryKey: QUERY_KEYS.metrics.trends(modelId, metricName),
-    queryFn: () => metricsApi.getMetricTrends({ modelId, metricName, limit }),
-    enabled: !!modelId && !!metricName,
+    queryFn: () => metricsApi.getMetricTrends({ model_id: modelId, metric_name: metricName, limit }),
+    enabled: enabled && !!modelId && !!metricName,
   });
 
   return {

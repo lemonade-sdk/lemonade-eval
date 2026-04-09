@@ -2,7 +2,7 @@
  * Main App Shell with Sidebar Navigation
  */
 
-import { ReactNode } from 'react';
+import React, { ReactNode } from 'react';
 import {
   AppShell,
   Burger,
@@ -17,7 +17,7 @@ import {
   ActionIcon,
   Tooltip,
 } from '@mantine/core';
-import { useDisclosure, useHover } from '@mantine/hooks';
+import { useHover } from '@mantine/hooks';
 import {
   IconDashboard,
   IconCpu,
@@ -28,8 +28,9 @@ import {
   IconLogout,
   IconSun,
   IconMoon,
-  IconBrandLemonade,
+  IconFlask,
   IconTrophy,
+  IconTargetArrow,
 } from '@tabler/icons-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUIStore } from '@/stores/uiStore';
@@ -39,6 +40,8 @@ interface AppShellProps {
   children: ReactNode;
   mobileOpened: boolean;
   desktopOpened: boolean;
+  toggleMobile: () => void;
+  toggleDesktop: () => void;
 }
 
 const navLinks = [
@@ -46,12 +49,13 @@ const navLinks = [
   { path: '/models', label: 'Models', icon: IconCpu },
   { path: '/runs', label: 'Runs', icon: IconListDetails },
   { path: '/benchmarks', label: 'Benchmarks', icon: IconTrophy },
+  { path: '/accuracy', label: 'Accuracy', icon: IconTargetArrow },
   { path: '/compare', label: 'Compare', icon: IconChartBar },
   { path: '/import', label: 'Import', icon: IconUpload },
   { path: '/settings', label: 'Settings', icon: IconSettings },
 ] as const;
 
-export default function AppShellComponent({ children, mobileOpened, desktopOpened }: AppShellProps) {
+export default function AppShellComponent({ children, mobileOpened, desktopOpened, toggleMobile, toggleDesktop }: AppShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const { setColorScheme, colorScheme } = useMantineColorScheme();
@@ -70,7 +74,7 @@ export default function AppShellComponent({ children, mobileOpened, desktopOpene
   };
 
   return (
-    <React.Fragment>
+    <>
       {/* Skip to content link for accessibility */}
       <a
         href="#main-content"
@@ -126,20 +130,20 @@ export default function AppShellComponent({ children, mobileOpened, desktopOpene
             <Group>
               <Burger
                 opened={mobileOpened}
-                onClick={() => {}}
+                onClick={toggleMobile}
                 hiddenFrom="sm"
                 size="sm"
                 aria-label="Toggle mobile navigation"
               />
               <Burger
                 opened={desktopOpened}
-                onClick={() => {}}
+                onClick={toggleDesktop}
                 visibleFrom="sm"
                 size="sm"
                 aria-label="Toggle sidebar"
               />
               <Group gap="xs">
-                <IconBrandLemonade size={28} color="var(--mantine-color-blue-6)" />
+                <IconFlask size={28} color="var(--mantine-color-blue-6)" />
                 <Text fw={700} size="lg" visibleFrom="sm">
                   Lemonade Eval
                 </Text>
@@ -194,14 +198,16 @@ export default function AppShellComponent({ children, mobileOpened, desktopOpene
           </Stack>
         </AppShell.Navbar>
 
-        {children}
+        <AppShell.Main>
+          {children}
+        </AppShell.Main>
       </AppShell>
-    </React.Fragment>
+    </>
   );
 }
 
 interface NavLinkProps {
-  icon: React.ComponentType<{ size: number }>;
+  icon: React.ComponentType<{ size: number; stroke?: number }>;
   label: string;
   to?: string;
   active?: boolean;

@@ -326,11 +326,8 @@ export interface DashboardStats {
 
 export interface RunStats {
   total_runs: number;
-  completed_runs: number;
-  failed_runs: number;
-  pending_runs: number;
-  running_runs: number;
-  avg_duration_seconds?: number | null;
+  by_status: Record<string, number>;
+  by_type: Record<string, number>;
 }
 
 // =============================================================================

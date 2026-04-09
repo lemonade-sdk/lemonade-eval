@@ -36,6 +36,7 @@ import {
   IconBell,
   IconClock,
   IconTable,
+  IconFolder,
 } from '@tabler/icons-react';
 import { useUIStore } from '@/stores/uiStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -48,7 +49,7 @@ interface SettingsForm {
 }
 
 export default function SettingsPage() {
-  const { colorScheme, toggleColorScheme, refreshInterval, itemsPerPage, setRefreshInterval, setItemsPerPage } = useUIStore();
+  const { colorScheme, toggleColorScheme, refreshInterval, itemsPerPage, setRefreshInterval, setItemsPerPage, cacheDir, setCacheDir } = useUIStore();
   const { user } = useAuthStore();
   const addNotification = useNotificationStore((state) => state.addNotification);
 
@@ -128,6 +129,17 @@ export default function SettingsPage() {
               <Title order={4}>Display</Title>
             </Group>
             <Stack gap="md">
+              <Box>
+                <TextInput
+                  label="Default Cache Directory"
+                  description="Path to the lemonade-eval cache (used as default in Import page)"
+                  leftSection={<IconFolder size={16} />}
+                  value={cacheDir}
+                  onChange={(e) => setCacheDir(e.currentTarget.value)}
+                  placeholder="~/.cache/lemonade"
+                />
+              </Box>
+              <Divider />
               <Box>
                 <Text size="sm" fw={600} mb="xs">
                   Items per page

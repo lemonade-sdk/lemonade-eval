@@ -6,6 +6,14 @@ Complete guide for using the Lemonade Eval Dashboard to store, visualize, and co
 
 1. [Getting Started](#getting-started)
 2. [Feature Walkthrough](#feature-walkthrough)
+   - [Dashboard Overview](#dashboard-overview)
+   - [Models Management](#models-management)
+   - [Runs Management](#runs-management)
+   - [Compare Page](#compare-page)
+   - [Benchmarks Page](#benchmarks-page)
+   - [Accuracy Page](#accuracy-page)
+   - [Import Page](#import-page)
+   - [Settings Page](#settings-page)
 3. [CLI Integration Guide](#cli-integration-guide)
 4. [Troubleshooting](#troubleshooting)
 
@@ -17,7 +25,7 @@ Complete guide for using the Lemonade Eval Dashboard to store, visualize, and co
 
 Before using the dashboard, ensure you have:
 
-- **Backend**: Python 3.12+, PostgreSQL 16+ (or SQLite for development)
+- **Backend**: Python 3.12+, SQLite (default) or PostgreSQL 16+
 - **Frontend**: Node.js 18+, npm or pnpm
 - **Existing Data**: lemonade-eval YAML files in `~/.cache/lemonade/` (optional)
 
@@ -46,18 +54,18 @@ copy .env.example .env  # Windows
 # or
 cp .env.example .env    # Linux/macOS
 
-# Edit .env file with your settings:
-# - DATABASE_URL=postgresql://user:password@localhost:5432/lemonade_dashboard
+# Edit .env file with your settings (SQLite is the default, no DB setup needed):
+# - DATABASE_URL=sqlite:///./eval.db
 # - SECRET_KEY=your-secret-key-at-least-32-characters
 
 # Run database migrations
 alembic upgrade head
 
 # Start the server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 3001
 ```
 
-The backend API will be available at `http://localhost:8000`.
+The backend API will be available at `http://localhost:3001`.
 
 #### Step 2: Install and Start Frontend
 
@@ -77,11 +85,11 @@ cp .env.example .env    # Linux/macOS
 npm run dev
 ```
 
-The frontend dashboard will be available at `http://localhost:3000`.
+The frontend dashboard will be available at `http://localhost:5173` (Vite dev server default).
 
 #### Step 3: First Login
 
-1. Navigate to `http://localhost:3000`
+1. Navigate to `http://localhost:5173`
 2. Click "Login" or navigate to `/login`
 3. Use your credentials (default admin user must be created via database script)
 
@@ -236,13 +244,21 @@ Access: `/compare`
 
 The compare feature enables side-by-side analysis of multiple runs.
 
-#### How to Compare
+#### Compare Runs
 
 1. **Select Runs**: Use the multi-select dropdown to choose 2-5 runs
 2. **View Comparison Table**: See all metrics side by side
 3. **Analyze Charts**:
    - **Bar Chart**: Compare tokens per second across runs
    - **Radar Chart**: Multi-metric visualization
+
+#### Compare Models
+
+Switch to "Compare Models" mode using the segmented control to aggregate results across all runs of each model:
+
+1. **Select Models**: Choose 2+ models from the multi-select dropdown
+2. **View Aggregated Table**: Mean performance across all runs, with best values highlighted green
+3. **Bar Chart**: Average TPS comparison across selected models
 
 #### Comparison Table Features
 
@@ -251,7 +267,60 @@ The compare feature enables side-by-side analysis of multiple runs.
   - Lower-is-better metrics (TTFT, memory) highlight minimum
   - Higher-is-better metrics (TPS) highlight maximum
 - **Metric Categories**: Performance and accuracy metrics grouped
-- **Export Options**: Copy or download comparison data
+
+### Benchmarks Page
+
+Access: `/benchmarks`
+
+Visualizes benchmark results from the `bench` command across all runs.
+
+**Winner Highlight**: Automatically identifies and prominently displays the fastest model.
+
+**Summary Statistics**: Total runs, best TPS, best TTFT, and number of unique models.
+
+**Charts:**
+- **TPS Comparison Bar Chart**: Token generation speed for each run, sorted best-first
+- **TPS vs Prompt Length Chart**: Line chart showing how TPS changes across prompt lengths (64 → 128 → 256 tokens) for each run that has per-length metrics
+
+**Detailed Results Table:**
+
+| Column | Description |
+|--------|-------------|
+| Model | Model identifier |
+| TPS (tok/s) | Token generation speed |
+| TPS@64 / TPS@128 / TPS@256 | Per-prompt-length TPS |
+| TTFT (s) | Time to first token |
+| Std Dev | Consistency across iterations |
+| Backend | Inference backend (llamacpp, ort, etc.) |
+| Device | Hardware (cpu/gpu/npu) |
+
+Per-prompt-length columns (`TPS@64`, `TPS@128`, `TPS@256`) are populated when benchmarks are run with `--prompt-lengths 64,128,256`. See `docs/dashboard/benchmark_guide.md` for the full workflow.
+
+**Model Averages**: Cards showing aggregated TPS and TTFT when multiple runs exist for the same model.
+
+### Accuracy Page
+
+Access: `/accuracy`
+
+Displays accuracy evaluation results across three tabs. Use the model selector in the top-right to filter all tabs to a specific model.
+
+#### MMLU Tab
+
+- Select a specific MMLU run from the dropdown (defaults to most recent)
+- **Average MMLU Accuracy** metric card shows overall score
+- **Subject Accuracy Chart**: Horizontal bar chart of all 57 MMLU subjects, sorted highest-first
+- Use the scroll area to explore all subjects
+
+#### HumanEval Tab
+
+- Lists all HumanEval runs for the selected model
+- Shows run name, status, and date
+
+#### Perplexity Tab
+
+- Displays perplexity trend over time for the selected model
+- Only fetches data when this tab is active (no unnecessary network calls)
+- Select a model first — no data is shown without a model selection
 
 ### Import Page
 
@@ -347,7 +416,7 @@ Add dashboard configuration to your lemonade-eval setup:
 
 ```bash
 # Set environment variables
-export LEDASH_API_URL=http://localhost:8000
+export LEDASH_API_URL=http://localhost:3001
 export LEDASH_API_KEY=your-api-key-here
 export LEDASH_SECRET=your-cli-secret-here
 ```
@@ -369,7 +438,7 @@ Submit existing evaluation results:
 
 ```bash
 # Submit a single evaluation
-curl -X POST http://localhost:8000/api/v1/import/evaluation \
+curl -X POST http://localhost:3001/api/v1/import/evaluation \
   -H "Content-Type: application/json" \
   -H "X-CLI-Signature: $(echo -n '{"model_id":"..."}' | openssl dgst -sha256 -hmac 'secret' -binary | base64)" \
   -d '{
@@ -392,7 +461,7 @@ curl -X POST http://localhost:8000/api/v1/import/evaluation \
 For migrating historical data:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/import/bulk \
+curl -X POST http://localhost:3001/api/v1/import/bulk \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{
@@ -410,7 +479,7 @@ import asyncio
 import websockets
 
 async def watch_progress(run_id):
-    uri = f"ws://localhost:8000/ws/v1/evaluation-progress?run_id={run_id}"
+    uri = f"ws://localhost:3001/ws/v1/evaluation-progress?run_id={run_id}"
     async with websockets.connect(uri) as ws:
         while True:
             msg = await ws.recv()
@@ -430,26 +499,34 @@ asyncio.run(watch_progress("run-xyz-123"))
 **Symptom**: Frontend shows "Connection refused" or API errors
 
 **Solutions:**
-1. Verify backend is running: `curl http://localhost:8000/api/v1/health`
+1. Verify backend is running: `curl http://localhost:3001/api/v1/health`
 2. Check backend logs: `tail -f dashboard/backend/logs/error.log`
 3. Verify CORS settings in backend `.env`:
    ```
-   CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+   CORS_ORIGINS=http://localhost:5173,http://localhost:3000
    ```
 4. Ensure frontend API URL is correct in `.env`:
    ```
-   VITE_API_BASE_URL=http://localhost:8000
+   VITE_API_BASE_URL=http://localhost:3001
    ```
 
 #### Database Connection Errors
 
 **Symptom**: Backend fails to start with database errors
 
-**Solutions:**
+**Solutions (SQLite — default):**
+1. Verify `eval.db` exists: `ls dashboard/backend/eval.db`
+2. Initialize if missing:
+   ```bash
+   cd dashboard/backend
+   python -c "from app.database import Base, sync_engine; Base.metadata.create_all(bind=sync_engine)"
+   ```
+3. Run migrations: `alembic upgrade head`
+
+**Solutions (PostgreSQL — optional):**
 1. Verify PostgreSQL is running: `sudo systemctl status postgresql`
 2. Check database credentials in `.env`
 3. Test connection: `psql postgresql://user:password@localhost:5432/lemonade_dashboard`
-4. Run migrations: `alembic upgrade head`
 
 #### Authentication Failures
 
@@ -489,7 +566,7 @@ asyncio.run(watch_progress("run-xyz-123"))
 3. For nginx proxy, ensure upgrade headers are configured:
    ```nginx
    location /ws/ {
-       proxy_pass http://localhost:8000;
+       proxy_pass http://localhost:3001;
        proxy_http_version 1.1;
        proxy_set_header Upgrade $http_upgrade;
        proxy_set_header Connection "Upgrade";
@@ -536,6 +613,6 @@ asyncio.run(watch_progress("run-xyz-123"))
 ### Getting Help
 
 - **Documentation**: `/docs` directory
-- **API Reference**: `http://localhost:8000/docs` (Swagger UI)
+- **API Reference**: `http://localhost:3001/docs` (Swagger UI)
 - **Logs**: `dashboard/backend/logs/`
 - **GitHub Issues**: https://github.com/lemonade/lemonade-eval/issues

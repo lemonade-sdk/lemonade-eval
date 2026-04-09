@@ -19,8 +19,8 @@ export interface RadarChartData {
   subject: string;
   A?: number;
   B?: number;
-  fullMark: number;
-  [key: string]: string | number;
+  fullMark?: number;
+  [key: string]: string | number | undefined;
 }
 
 interface RadarChartProps {

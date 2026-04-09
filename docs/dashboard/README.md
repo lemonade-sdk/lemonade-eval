@@ -37,7 +37,7 @@ Welcome to the Lemonade Eval Dashboard documentation suite. This documentation c
 ### What is the Lemonade Eval Dashboard?
 
 The Lemonade Eval Dashboard is a web-based platform for:
-- Storing LLM/VLM evaluation results in a PostgreSQL database
+- Storing LLM/VLM evaluation results in a SQLite (development) / PostgreSQL (production) database
 - Visualizing performance and accuracy metrics
 - Comparing models and runs side-by-side
 - Importing existing lemonade-eval YAML data
@@ -54,8 +54,10 @@ The Lemonade Eval Dashboard is a web-based platform for:
                                 │
                                 ▼
                         ┌──────────────────┐
+                        │   SQLite /       │
                         │   PostgreSQL     │
-                        │   + Redis        │
+                        │   + optional     │
+                        │   Redis          │
                         └──────────────────┘
 ```
 
@@ -72,6 +74,8 @@ The Lemonade Eval Dashboard is a web-based platform for:
 | **CLI Integration** | Automated submission from lemonade-eval CLI |
 | **Authentication** | JWT-based auth with API key support |
 | **Rate Limiting** | Redis-based rate limiting |
+| **Benchmarks Page** | Sweep benchmark visualization with charts |
+| **Accuracy Page** | Accuracy metric comparison across models |
 
 ---
 
@@ -176,7 +180,7 @@ The Operations Guide covers production deployment:
 
 | Environment | URL |
 |-------------|-----|
-| Development | `http://localhost:8000` |
+| Development | `http://localhost:3001` |
 | Production | `https://your-domain.com` |
 
 ### Key Endpoints
@@ -225,7 +229,7 @@ X-API-Key: ledash_your-api-key-here
 ### Getting Help
 
 - **Documentation**: This documentation suite
-- **API Docs**: `http://localhost:8000/docs` (Swagger UI)
+- **API Docs**: `http://localhost:3001/docs` (Swagger UI)
 - **GitHub Issues**: https://github.com/lemonade/lemonade-eval/issues
 
 ### Reporting Issues

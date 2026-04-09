@@ -21,7 +21,7 @@ import {
 } from '@mantine/core';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import { IconBrandLemonade, IconMail, IconLock, IconAlertCircle } from '@tabler/icons-react';
+import { IconFlask, IconMail, IconLock, IconAlertCircle } from '@tabler/icons-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useNotificationStore } from '@/stores/notificationStore';
 
@@ -69,7 +69,7 @@ export default function LoginPage() {
     <Center w="100vw" h="100vh" bg="var(--mantine-color-gray-0)">
       <Paper w={420} p="xl" radius="md" shadow="lg">
         <Stack align="center" mb="xl">
-          <IconBrandLemonade size={48} color="var(--mantine-color-blue-6)" />
+          <IconFlask size={48} color="var(--mantine-color-blue-6)" />
           <Title order={2}>Lemonade Eval</Title>
           <Text c="dimmed" size="sm">
             Sign in to your dashboard

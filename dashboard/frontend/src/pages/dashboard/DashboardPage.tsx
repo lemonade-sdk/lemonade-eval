@@ -159,7 +159,7 @@ export default function DashboardPage() {
                 Completed
               </Text>
               <Text size="xl" fw={700} mt="xs" c="green.6">
-                {stats?.completed_runs || 0}
+                {stats?.by_status?.completed || 0}
               </Text>
             </div>
             <IconCheck size={32} color="var(--mantine-color-green-6)" />
@@ -173,7 +173,7 @@ export default function DashboardPage() {
                 Failed
               </Text>
               <Text size="xl" fw={700} mt="xs" c="red.6">
-                {stats?.failed_runs || 0}
+                {stats?.by_status?.failed || 0}
               </Text>
             </div>
             <IconX size={32} color="var(--mantine-color-red-6)" />
@@ -217,7 +217,7 @@ export default function DashboardPage() {
                 size="lg"
                 leftSection={<IconClock size={14} />}
               >
-                {stats?.running_runs || 0} Running
+                {stats?.by_status?.running || 0} Running
               </Badge>
               <Badge
                 variant="light"
@@ -225,7 +225,7 @@ export default function DashboardPage() {
                 size="lg"
                 leftSection={<IconClock size={14} />}
               >
-                {stats?.pending_runs || 0} Pending
+                {stats?.by_status?.pending || 0} Pending
               </Badge>
               <Badge
                 variant="light"
@@ -233,7 +233,7 @@ export default function DashboardPage() {
                 size="lg"
                 leftSection={<IconCheck size={14} />}
               >
-                {stats?.completed_runs || 0} Completed
+                {stats?.by_status?.completed || 0} Completed
               </Badge>
               <Badge
                 variant="light"
@@ -241,20 +241,9 @@ export default function DashboardPage() {
                 size="lg"
                 leftSection={<IconX size={14} />}
               >
-                {stats?.failed_runs || 0} Failed
+                {stats?.by_status?.failed || 0} Failed
               </Badge>
             </Group>
-
-            {stats?.avg_duration_seconds && (
-              <Box mt="lg">
-                <Text size="sm" c="dimmed" mb="xs">
-                  Average Duration
-                </Text>
-                <Text size="xl" fw={700}>
-                  {formatDuration(stats.avg_duration_seconds)}
-                </Text>
-              </Box>
-            )}
           </Card>
         </Grid.Col>
       </Grid>

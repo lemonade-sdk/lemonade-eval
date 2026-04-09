@@ -7,7 +7,7 @@ import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'ax
 import { ApiErrorClass } from '@/types';
 
 // API base URL from environment or default
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
 
 // Request timeout in milliseconds
 const REQUEST_TIMEOUT = 30000;
@@ -166,8 +166,10 @@ apiClient.interceptors.response.use(
       // Extract error code from response
       errorCode = data.code || data.error_code;
 
-      // Get detail or message
-      if (data.detail) {
+      // Get detail or message — handle FastAPI array detail format
+      if (Array.isArray(data.detail)) {
+        message = data.detail.map((d: { msg?: string }) => d.msg || String(d)).join('; ');
+      } else if (typeof data.detail === 'string') {
         message = data.detail;
       } else if (data.message) {
         message = data.message;

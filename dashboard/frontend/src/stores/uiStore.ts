@@ -28,6 +28,10 @@ interface UIState {
   // Items per page for tables
   itemsPerPage: number;
   setItemsPerPage: (count: number) => void;
+
+  // Default cache directory for YAML imports
+  cacheDir: string;
+  setCacheDir: (dir: string) => void;
 }
 
 export const useUIStore = create<UIState>()(
@@ -55,6 +59,10 @@ export const useUIStore = create<UIState>()(
       // Items per page (default 20)
       itemsPerPage: 20,
       setItemsPerPage: (count) => set({ itemsPerPage: count }),
+
+      // Cache directory (default matches lemonade-eval default)
+      cacheDir: '~/.cache/lemonade',
+      setCacheDir: (dir) => set({ cacheDir: dir }),
     }),
     {
       name: 'ui-storage',
@@ -64,6 +72,7 @@ export const useUIStore = create<UIState>()(
         notificationsEnabled: state.notificationsEnabled,
         refreshInterval: state.refreshInterval,
         itemsPerPage: state.itemsPerPage,
+        cacheDir: state.cacheDir,
       }),
     }
   )

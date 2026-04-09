@@ -4,7 +4,8 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { modelsApi } from '@/api/models';
-import type { Model, ModelCreate, ModelUpdate, ListRunsParams } from '@/types';
+import type { Model, ModelCreate, ModelUpdate } from '@/types';
+import type { ListRunsParams } from '@/api/runs';
 import { useNotificationStore } from '@/stores/notificationStore';
 
 const QUERY_KEYS = {

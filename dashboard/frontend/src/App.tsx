@@ -7,6 +7,7 @@ import { Box } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 
 import AppShell from '@components/common/AppShell';
+import { ProtectedRoute } from '@/components/common';
 import DashboardPage from '@pages/dashboard/DashboardPage';
 import ModelsPage from '@pages/models/ModelsPage';
 import ModelDetailPage from '@pages/models/ModelDetailPage';
@@ -17,29 +18,31 @@ import ImportPage from '@pages/import/ImportPage';
 import SettingsPage from '@pages/settings/SettingsPage';
 import LoginPage from '@pages/auth/LoginPage';
 import BenchmarksPage from '@pages/benchmarks/BenchmarksPage';
+import AccuracyPage from '@pages/accuracy/AccuracyPage';
 
 function App() {
   const [mobileOpened, { toggle: toggleMobile }] = useDisclosure(false);
   const [desktopOpened, { toggle: toggleDesktop }] = useDisclosure(true);
 
   return (
-    <AppShell mobileOpened={mobileOpened} desktopOpened={desktopOpened}>
-      <Box component="main" id="main-content" p="md" style={{ flex: 1, overflow: 'auto' }}>
+    <AppShell mobileOpened={mobileOpened} desktopOpened={desktopOpened} toggleMobile={toggleMobile} toggleDesktop={toggleDesktop}>
+      <Box component="main" id="main-content">
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
 
           {/* Protected routes */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/models" element={<ModelsPage />} />
-          <Route path="/models/:id" element={<ModelDetailPage />} />
-          <Route path="/runs" element={<RunsPage />} />
-          <Route path="/runs/:id" element={<RunDetailPage />} />
-          <Route path="/compare" element={<ComparePage />} />
-          <Route path="/benchmarks" element={<BenchmarksPage />} />
-          <Route path="/import" element={<ImportPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/models" element={<ProtectedRoute><ModelsPage /></ProtectedRoute>} />
+          <Route path="/models/:id" element={<ProtectedRoute><ModelDetailPage /></ProtectedRoute>} />
+          <Route path="/runs" element={<ProtectedRoute><RunsPage /></ProtectedRoute>} />
+          <Route path="/runs/:id" element={<ProtectedRoute><RunDetailPage /></ProtectedRoute>} />
+          <Route path="/compare" element={<ProtectedRoute><ComparePage /></ProtectedRoute>} />
+          <Route path="/benchmarks" element={<ProtectedRoute><BenchmarksPage /></ProtectedRoute>} />
+          <Route path="/accuracy" element={<ProtectedRoute><AccuracyPage /></ProtectedRoute>} />
+          <Route path="/import" element={<ProtectedRoute><ImportPage /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
 
           {/* Catch all - redirect to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

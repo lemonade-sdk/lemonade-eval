@@ -32,14 +32,15 @@ import type { Metric } from '@/types';
 export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
 
+  // Hooks must be called unconditionally — use enabled flags to prevent fetching when id is missing
+  const { data: runData, isLoading: runLoading, error: runError } = useRun(id ?? '', true, !!id);
+  const { data: metricsData, isLoading: metricsLoading } = useRunMetrics(id ?? '', !!id);
+  const { isConnected } = useWebSocket(id ?? '');
+  const { data: modelData } = useModel(runData?.data?.model_id || '', !!runData?.data?.model_id);
+
   if (!id) {
     return <ErrorDisplay message="Run ID is required" fullScreen />;
   }
-
-  const { data: runData, isLoading: runLoading, error: runError } = useRun(id, true);
-  const { data: metricsData, isLoading: metricsLoading } = useRunMetrics(id);
-  const { isConnected } = useWebSocket(id);
-  const { data: modelData } = useModel(runData?.data?.model_id || '', !!runData?.data?.model_id);
 
   const run = runData?.data;
   const metrics = metricsData?.data || [];
@@ -49,17 +50,21 @@ export default function RunDetailPage() {
   const performanceMetrics = metrics.filter((m) => m.category === 'performance');
   const accuracyMetrics = metrics.filter((m) => m.category === 'accuracy');
 
-  // Prepare chart data for iteration values
-  const iterationData = performanceMetrics
-    .filter((m) => m.iteration_values && m.iteration_values.length > 0)
-    .map((m, i) => {
-      const maxLength = Math.max(...performanceMetrics.filter(p => p.iteration_values).map(p => p.iteration_values?.length || 0));
-      return Array.from({ length: maxLength }, (_, idx) => ({
-        iteration: idx + 1,
-        [m.name]: m.iteration_values?.[idx] || null,
-      }));
-    })
-    .flat();
+  // Prepare chart data for iteration values — merge all metrics into unified per-iteration objects
+  const metricsWithIter = performanceMetrics.filter(
+    (m) => m.iteration_values && m.iteration_values.length > 0
+  );
+  const maxIterLength = metricsWithIter.reduce(
+    (max, m) => Math.max(max, m.iteration_values?.length ?? 0),
+    0
+  );
+  const iterationData = Array.from({ length: maxIterLength }, (_, idx) => {
+    const point: Record<string, string | number | null> = { iteration: idx + 1 };
+    metricsWithIter.forEach((m) => {
+      point[m.name] = (m.iteration_values as number[])?.[idx] ?? null;
+    });
+    return point;
+  });
 
   const columns: ColumnDef<Metric>[] = [
     {

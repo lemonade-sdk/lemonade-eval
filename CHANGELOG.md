@@ -87,6 +87,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Theme persistence across page refreshes
 - Missing accessibility attributes on interactive elements
 
+### Added - Dashboard UI/UX Session
+
+- Benchmarks Page: new frontend page for visualizing benchmark sweep results across models
+- Accuracy Page: new frontend page for accuracy metric comparison across models
+
+### Fixed - Dashboard UI/UX Session
+
+- Backend API server port standardized to 3001 across all configuration (was 8000)
+- Frontend dev server URL updated to `localhost:5173` (Vite default; was `localhost:3000`)
+- `AppShell.Main` wrapper added as required compound component for correct Mantine v7 layout rendering
+- Auth login response now handled as direct OAuth2 token shape (not nested in wrapper)
+- FastAPI route ordering corrected: static routes (`/benchmark/results`) registered before parameterized routes (`/{run_id}`)
+- `MODEL_COLORS` undefined reference replaced with `SWEEP_PALETTE` constant
+- Rules of Hooks violation resolved: hooks moved above early-return guards in `RunDetailPage`
+- `RunStats` TypeScript interface corrected to match actual backend API response shape
+- `IconBrandLemonade` (non-existent) replaced with `IconFlask` from `@tabler/icons-react`
+- ES module re-export syntax fixed in `components/common/index.ts`
+- FastAPI array `detail` format handled correctly in API client error processing
+- `aiosqlite` and `pydantic[email]` added as required backend dependencies
+
 ## [1.0.0] - 2024-01-15
 
 ### Added

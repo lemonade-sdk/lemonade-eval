@@ -450,7 +450,7 @@ global:
 scrape_configs:
   - job_name: 'lemonade-eval'
     static_configs:
-      - targets: ['localhost:8000']
+      - targets: ['localhost:3001']
     metrics_path: '/metrics'
 
   - job_name: 'node'

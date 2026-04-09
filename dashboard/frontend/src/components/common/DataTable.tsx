@@ -9,13 +9,11 @@ import {
   Text,
   Group,
   ActionIcon,
-  Badge,
   Menu,
   ScrollArea,
   Pagination,
   Select,
   Box,
-  Divider,
 } from '@mantine/core';
 import {
   useReactTable,
@@ -32,6 +30,13 @@ import { useState, useEffect } from 'react';
 import { IconDots, IconChevronUp, IconChevronDown, IconSelector } from '@tabler/icons-react';
 import type { Row } from '@tanstack/react-table';
 
+// Fix 1: RowAction interface and actions prop added to DataTableProps
+interface RowAction<T> {
+  label: string;
+  color?: string;
+  onClick: (row: T) => void;
+}
+
 interface DataTableProps<T> {
   data: T[];
   columns: ColumnDef<T>[];
@@ -43,6 +48,7 @@ interface DataTableProps<T> {
   total?: number;
   isLoading?: boolean;
   emptyMessage?: string;
+  actions?: RowAction<T>[];
 }
 
 export function DataTable<T>({
@@ -56,6 +62,7 @@ export function DataTable<T>({
   total,
   isLoading = false,
   emptyMessage = 'No data available',
+  actions,
 }: DataTableProps<T>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -109,15 +116,16 @@ export function DataTable<T>({
     rowCount: total ?? data.length,
   });
 
-  // Handle selection changes
+  // Fix 3: useEffect now has dependency array so it only fires when selection changes
   useEffect(() => {
     if (onSelectionChange) {
-      const selectedRows = table
-        .getFilteredSelectedRowModel()
-        .rows.map((row) => row.original);
+      const selectedRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original);
       onSelectionChange(selectedRows);
     }
-  });
+  }, [rowSelection, onSelectionChange]);
+
+  // Fix 2 + Fix 4: derive whether the actions column should be rendered
+  const hasActions = actions !== undefined && actions.length > 0;
 
   return (
     <Box>
@@ -133,10 +141,9 @@ export function DataTable<T>({
                     style={{
                       cursor: header.column.getCanSort() ? 'pointer' : 'default',
                     }}
-                    sortDirection={header.column.getIsSorted()}
-                    thSortIndicator={header.column.getCanSort() ? {
-                      'aria-label': `Sort by ${flexRender(header.column.columnDef.header, header.getContext())}`,
-                    } : undefined}
+                    aria-label={header.column.getCanSort()
+                      ? `Sort by ${header.column.id} ${header.column.getIsSorted() === 'asc' ? 'descending' : 'ascending'}`
+                      : undefined}
                   >
                     <Group gap="xs" wrap="nowrap">
                       {flexRender(header.column.columnDef.header, header.getContext())}
@@ -150,20 +157,39 @@ export function DataTable<T>({
                     </Group>
                   </Table.Th>
                 ))}
-                <Table.Th />
+                {/* Fix 2: Only render the empty header cell when actions are provided */}
+                {hasActions && <Table.Th />}
               </Table.Tr>
             ))}
           </Table.Thead>
           <Table.Tbody>
             {isLoading ? (
               <Table.Tr>
-                <Table.Td colSpan={columns.length + (enableSelection ? 1 : 0)} ta="center" py="xl">
+                {/* Fix 4: colSpan accounts for the conditional actions column */}
+                <Table.Td
+                  colSpan={
+                    columns.length +
+                    (enableSelection ? 1 : 0) +
+                    (hasActions ? 1 : 0)
+                  }
+                  ta="center"
+                  py="xl"
+                >
                   <Text c="dimmed">Loading...</Text>
                 </Table.Td>
               </Table.Tr>
             ) : table.getRowModel().rows.length === 0 ? (
               <Table.Tr>
-                <Table.Td colSpan={columns.length + (enableSelection ? 1 : 0)} ta="center" py="xl">
+                {/* Fix 4: colSpan accounts for the conditional actions column */}
+                <Table.Td
+                  colSpan={
+                    columns.length +
+                    (enableSelection ? 1 : 0) +
+                    (hasActions ? 1 : 0)
+                  }
+                  ta="center"
+                  py="xl"
+                >
                   <Text c="dimmed">{emptyMessage}</Text>
                 </Table.Td>
               </Table.Tr>
@@ -182,27 +208,39 @@ export function DataTable<T>({
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </Table.Td>
                   ))}
-                  <Table.Td>
-                    <Group gap="xs" justify="flex-end">
-                      <Menu withinPortal position="bottom-end" shadow="sm">
-                        <Menu.Target>
-                          <ActionIcon
-                            variant="subtle"
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label="Row actions menu"
-                          >
-                            <IconDots size={16} />
-                          </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                          <Menu.Item>View details</Menu.Item>
-                          <Menu.Item>Export</Menu.Item>
-                          <Divider />
-                          <Menu.Item color="red">Delete</Menu.Item>
-                        </Menu.Dropdown>
-                      </Menu>
-                    </Group>
-                  </Table.Td>
+                  {/* Fix 2: Only render the actions cell when actions are provided */}
+                  {hasActions && (
+                    <Table.Td>
+                      <Group gap="xs" justify="flex-end">
+                        <Menu withinPortal position="bottom-end" shadow="sm">
+                          <Menu.Target>
+                            <ActionIcon
+                              variant="subtle"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label="Row actions menu"
+                            >
+                              <IconDots size={16} />
+                            </ActionIcon>
+                          </Menu.Target>
+                          <Menu.Dropdown>
+                            {/* Fix 2: Map over actions prop instead of hardcoded items */}
+                            {actions.map((a, i) => (
+                              <Menu.Item
+                                key={i}
+                                color={a.color}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  a.onClick(row.original);
+                                }}
+                              >
+                                {a.label}
+                              </Menu.Item>
+                            ))}
+                          </Menu.Dropdown>
+                        </Menu>
+                      </Group>
+                    </Table.Td>
+                  )}
                 </Table.Tr>
               ))
             )}

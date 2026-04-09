@@ -92,17 +92,20 @@ export function BarChart({
           {showGrid && <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />}
           <XAxis
             type={layout === 'horizontal' ? 'category' : 'number'}
-            dataKey={nameKey}
+            dataKey={layout === 'horizontal' ? nameKey : undefined}
             stroke={textColor}
             tick={{ fontSize: 12 }}
             angle={layout === 'horizontal' ? -45 : 0}
             textAnchor={layout === 'horizontal' ? 'end' : 'middle'}
             height={layout === 'horizontal' ? 60 : undefined}
+            tickFormatter={layout === 'vertical' ? (v: number) => `${v}${unit ? ` ${unit}` : ''}` : undefined}
           />
           <YAxis
             type={layout === 'horizontal' ? 'number' : 'category'}
+            dataKey={layout === 'vertical' ? nameKey : undefined}
             stroke={textColor}
             tick={{ fontSize: 12 }}
+            width={layout === 'vertical' ? 150 : undefined}
             tickFormatter={layout === 'horizontal' ? (v: number) => `${v}${unit ? ` ${unit}` : ''}` : undefined}
           />
           <Tooltip

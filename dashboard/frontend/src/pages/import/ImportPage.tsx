@@ -34,6 +34,7 @@ import {
 import { useImportYaml, useImportStatus, useScanCacheDirectory } from '@/hooks/useImport';
 import { LoadingSpinner, ErrorDisplay } from '@/components/common';
 import { useWebSocket } from '@/hooks/useWebSocket';
+import { useUIStore } from '@/stores/uiStore';
 
 interface ImportForm {
   cache_dir: string;
@@ -44,10 +45,11 @@ interface ImportForm {
 export default function ImportPage() {
   const [lastJobId, setLastJobId] = useState<string | null>(null);
   const [scanResults, setScanResults] = useState<string[] | null>(null);
+  const { cacheDir: defaultCacheDir } = useUIStore();
 
   const { register, handleSubmit, watch, setValue } = useForm<ImportForm>({
     defaultValues: {
-      cache_dir: '',
+      cache_dir: defaultCacheDir,
       skip_duplicates: true,
       dry_run: false,
     },

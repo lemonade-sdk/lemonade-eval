@@ -7,36 +7,41 @@ import {
   Text,
   Title,
   Card,
-  Grid,
   Badge,
   Box,
   Table,
-  Skeleton,
   SimpleGrid,
-  Paper,
   ThemeIcon,
   Divider,
-  Tabs,
 } from '@mantine/core';
 import { IconTrophy, IconGauge, IconClock, IconDatabase } from '@tabler/icons-react';
 import { useBenchmarkResults } from '@/hooks/useRuns';
 import { LoadingSpinner, ErrorDisplay } from '@/components/common';
-import { BarChart } from '@/components/charts';
-import type { Run, Metric } from '@/types';
+import { BarChart, LineChart } from '@/components/charts';
+import type { Metric } from '@/types';
 
-// Color scheme for models
-const MODEL_COLORS: Record<string, string> = {
-  'Qwen3.5-2B-GGUF': 'var(--mantine-color-blue-6)',
-  'Qwen3.5-4B-GGUF': 'var(--mantine-color-violet-6)',
-};
+const PROMPT_LENGTHS = [64, 128, 256] as const;
+
+const SWEEP_PALETTE = [
+  'var(--mantine-color-blue-6)',
+  'var(--mantine-color-violet-6)',
+  'var(--mantine-color-teal-6)',
+  'var(--mantine-color-orange-6)',
+  'var(--mantine-color-pink-6)',
+  'var(--mantine-color-green-6)',
+  'var(--mantine-color-yellow-7)',
+  'var(--mantine-color-cyan-6)',
+];
+
+function buildRunLabel(run: { build_name: string; backend?: string | null }): string {
+  const base = run.build_name.length > 18 ? run.build_name.slice(0, 18) : run.build_name;
+  return run.backend ? `${base} (${run.backend})` : base;
+}
 
 export default function BenchmarksPage() {
-  const { data: benchmarkData, isLoading, error } = useBenchmarkResults();
+  const { results: processedData, isLoading, error } = useBenchmarkResults();
 
-  // Process benchmark data
-  const processedData = benchmarkData?.data || [];
-
-  // Find best TPS
+  // Find best TPS + per-prompt-length values
   const tpsData = processedData.map((item: any) => {
     const tpsMetric = item.metrics?.find((m: Metric) =>
       m.name === 'token_generation_tokens_per_second'
@@ -52,17 +57,45 @@ export default function BenchmarksPage() {
       runId: item.run.id,
       modelId: item.run.model_id,
       modelName: item.run.build_name.split('-')[0] || 'Unknown',
-      tps: tpsMetric?.value_numeric || 0,
-      ttft: ttftMetric?.value_numeric || 0,
-      stdDev: stdDevMetric?.value_numeric || 0,
+      tps: tpsMetric?.value_numeric ?? 0,
+      ttft: ttftMetric?.value_numeric ?? 0,
+      stdDev: stdDevMetric?.value_numeric ?? 0,
       backend: item.run.backend,
       device: item.run.device,
+      tps64: item.metrics?.find((m: Metric) => m.name === 'tps_prompt_64')?.value_numeric ?? null as number | null,
+      tps128: item.metrics?.find((m: Metric) => m.name === 'tps_prompt_128')?.value_numeric ?? null as number | null,
+      tps256: item.metrics?.find((m: Metric) => m.name === 'tps_prompt_256')?.value_numeric ?? null as number | null,
     };
   });
 
   // Sort by TPS (descending)
   const sortedByTps = [...tpsData].sort((a, b) => b.tps - a.tps);
   const winner = sortedByTps[0];
+
+  // Prompt-length sweep: tps_prompt_64, tps_prompt_128, tps_prompt_256
+  // Shape: [{ promptLength: 64, [runLabel]: tps, ... }, ...]
+  const promptSweepRuns = processedData.filter((item: any) =>
+    PROMPT_LENGTHS.some((len) =>
+      item.metrics?.some((m: Metric) => m.name === `tps_prompt_${len}`)
+    )
+  );
+  const promptSweepData = PROMPT_LENGTHS.map((len) => {
+    const point: Record<string, string | number> = { promptLength: len };
+    promptSweepRuns.forEach((item: any) => {
+      const label = buildRunLabel(item.run);
+      const metric = item.metrics?.find((m: Metric) => m.name === `tps_prompt_${len}`);
+      point[label] = metric?.value_numeric ?? 0;
+    });
+    return point;
+  });
+  const promptSweepLines = promptSweepRuns.map((item: any, idx: number) => {
+    const label = buildRunLabel(item.run);
+    return {
+      key: label,
+      name: label,
+      color: SWEEP_PALETTE[idx % SWEEP_PALETTE.length],
+    };
+  });
 
   // Group by model for comparison
   const modelComparison: Record<string, any[]> = {};
@@ -213,10 +246,10 @@ export default function BenchmarksPage() {
               Token Generation Speed Comparison
             </Title>
             <BarChart
-              data={sortedByTps.map((item) => ({
+              data={sortedByTps.map((item, idx) => ({
                 name: item.modelId.replace('-GGUF', '').split('-').pop() || item.modelId,
                 value: item.tps,
-                color: MODEL_COLORS[item.modelId] || 'var(--mantine-color-gray-6)',
+                color: SWEEP_PALETTE[idx % SWEEP_PALETTE.length],
               }))}
               dataKey="value"
               title="Tokens per Second (higher is better)"
@@ -224,6 +257,32 @@ export default function BenchmarksPage() {
               height={300}
               highlightBest
             />
+          </Card>
+
+          {/* Prompt-Length Sweep Chart */}
+          <Card padding="lg" radius="md" withBorder mb="md">
+            <Title order={4} mb="xs">
+              TPS vs Prompt Length
+            </Title>
+            <Text size="sm" c="dimmed" mb="md">
+              How token generation speed changes as prompt length increases (64 → 128 → 256 tokens)
+            </Text>
+            {promptSweepRuns.length === 0 ? (
+              <Text c="dimmed" ta="center" py="xl" size="sm">
+                No prompt-length sweep data available. Run the bench command with prompt length
+                variants to populate this chart.
+              </Text>
+            ) : (
+              <LineChart
+                data={promptSweepData as any}
+                dataKey="promptLength"
+                nameKey="promptLength"
+                multipleLines={promptSweepLines}
+                unit="tok/s"
+                height={320}
+                yAxisLabel="Tokens / Second"
+              />
+            )}
           </Card>
 
           {/* Detailed Comparison Table */}
@@ -236,6 +295,9 @@ export default function BenchmarksPage() {
                 <Table.Tr>
                   <Table.Th>Model</Table.Th>
                   <Table.Th ta="right">TPS (tok/s)</Table.Th>
+                  <Table.Th ta="right">TPS@64</Table.Th>
+                  <Table.Th ta="right">TPS@128</Table.Th>
+                  <Table.Th ta="right">TPS@256</Table.Th>
                   <Table.Th ta="right">TTFT (s)</Table.Th>
                   <Table.Th ta="right">Std Dev</Table.Th>
                   <Table.Th>Backend</Table.Th>
@@ -258,6 +320,15 @@ export default function BenchmarksPage() {
                       <Text fw={index === 0 ? 700 : 400}>
                         {item.tps.toFixed(2)}
                       </Text>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Text size="sm" c="dimmed">{item.tps64?.toFixed(2) ?? '-'}</Text>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Text size="sm" c="dimmed">{item.tps128?.toFixed(2) ?? '-'}</Text>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Text size="sm" c="dimmed">{item.tps256?.toFixed(2) ?? '-'}</Text>
                     </Table.Td>
                     <Table.Td ta="right">
                       {item.ttft.toFixed(3)}

@@ -15,13 +15,16 @@ import {
   Divider,
   SimpleGrid,
   Anchor,
+  Select,
 } from '@mantine/core';
 import { useParams, Link } from 'react-router-dom';
+import { useState } from 'react';
 import { IconArrowLeft, IconExternalLink } from '@tabler/icons-react';
 import { useModel, useModelRuns } from '@/hooks/useModels';
 import { useRuns } from '@/hooks/useRuns';
+import { useMetricTrends } from '@/hooks/useMetrics';
 import { LoadingSpinner, ErrorDisplay, StatusBadge, DataTable, MetricCard } from '@/components/common';
-import { BarChart } from '@/components/charts';
+import { BarChart, LineChart } from '@/components/charts';
 import { formatDateTime, extractModelFamily, parseQuantization } from '@/utils';
 import { ColumnDef } from '@tanstack/react-table';
 import type { Run } from '@/types';
@@ -38,6 +41,14 @@ export default function ModelDetailPage() {
 
   const model = modelData?.data;
   const runs = runsData?.data || [];
+
+  const [trendMetric, setTrendMetric] = useState('token_generation_tokens_per_second');
+  const { trends, isLoading: trendsLoading } = useMetricTrends(id, trendMetric);
+
+  const trendChartData = trends.map((t) => ({
+    name: t.run_name,
+    value: t.value,
+  }));
 
   // Prepare data for chart - run types distribution
   const runTypeCounts = runs.reduce((acc, run) => {
@@ -248,6 +259,39 @@ export default function ModelDetailPage() {
           </Card>
         </Grid.Col>
       </Grid>
+
+      {/* Performance Trend */}
+      <Card padding="lg" radius="md" withBorder mt="md">
+        <Group justify="space-between" mb="md">
+          <Title order={4}>Performance Trend</Title>
+          <Select
+            size="sm"
+            value={trendMetric}
+            onChange={(v) => v && setTrendMetric(v)}
+            data={[
+              { value: 'token_generation_tokens_per_second', label: 'Tokens / Second' },
+              { value: 'seconds_to_first_token', label: 'Time to First Token (s)' },
+              { value: 'prefill_tokens_per_second', label: 'Prefill Speed (tok/s)' },
+              { value: 'max_memory_used_gbyte', label: 'Peak Memory (GB)' },
+            ]}
+            w={220}
+          />
+        </Group>
+        {trendsLoading ? (
+          <Skeleton height={250} />
+        ) : trendChartData.length === 0 ? (
+          <Text c="dimmed" ta="center" py="xl">
+            No trend data available for this metric.
+          </Text>
+        ) : (
+          <LineChart
+            data={trendChartData}
+            dataKey="value"
+            nameKey="name"
+            height={250}
+          />
+        )}
+      </Card>
     </Box>
   );
 }

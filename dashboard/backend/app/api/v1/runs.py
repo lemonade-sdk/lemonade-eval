@@ -115,6 +115,39 @@ async def get_run_stats(
     )
 
 
+@router.get("/benchmark/results", response_model=APIResponse)
+async def get_benchmark_results(
+    db: Session = Depends(get_db_session),
+):
+    """
+    Get benchmark results grouped by model.
+
+    Returns benchmark runs with their metrics, organized for comparison.
+    """
+    from app.models import Run, Metric
+    from sqlalchemy import select
+    from app.schemas import RunResponse, MetricResponse
+
+    # Get all benchmark runs directly
+    query = select(Run).where(Run.run_type == "benchmark").order_by(Run.created_at.desc()).limit(100)
+    runs = db.execute(query).scalars().all()
+
+    # Get metrics for each run
+    results = []
+    for run in runs:
+        metrics_query = select(Metric).where(Metric.run_id == run.id)
+        metrics = db.execute(metrics_query).scalars().all()
+        results.append({
+            "run": RunResponse.model_validate(run).model_dump(),
+            "metrics": [MetricResponse.model_validate(m).model_dump() for m in metrics],
+        })
+
+    return APIResponse(
+        success=True,
+        data=results,
+    )
+
+
 @router.get("/{run_id}", response_model=APIResponse)
 async def get_run(
     run_id: str,
@@ -238,37 +271,4 @@ async def get_run_metrics(
     return APIResponse(
         success=True,
         data=metrics,
-    )
-
-
-@router.get("/benchmark/results", response_model=APIResponse)
-async def get_benchmark_results(
-    db: Session = Depends(get_db_session),
-):
-    """
-    Get benchmark results grouped by model.
-
-    Returns benchmark runs with their metrics, organized for comparison.
-    """
-    from app.models import Run, Metric
-    from sqlalchemy import select
-    from app.schemas import RunResponse, MetricResponse
-
-    # Get all benchmark runs directly
-    query = select(Run).where(Run.run_type == "benchmark").order_by(Run.created_at.desc()).limit(100)
-    runs = db.execute(query).scalars().all()
-
-    # Get metrics for each run
-    results = []
-    for run in runs:
-        metrics_query = select(Metric).where(Metric.run_id == run.id)
-        metrics = db.execute(metrics_query).scalars().all()
-        results.append({
-            "run": RunResponse.model_validate(run).model_dump(),
-            "metrics": [MetricResponse.model_validate(m).model_dump() for m in metrics],
-        })
-
-    return APIResponse(
-        success=True,
-        data=results,
     )

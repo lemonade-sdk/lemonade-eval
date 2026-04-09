@@ -2,7 +2,7 @@
  * React Query hooks for Runs
  */
 
-import { useQuery, useMutation, useQueryClient, useQueryClient as getClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { runsApi, type ListRunsParams } from '@/api/runs';
 import type { Run, RunCreate, RunUpdate, RunStatus } from '@/types';
 import { useNotificationStore } from '@/stores/notificationStore';
@@ -190,7 +190,7 @@ export function useBenchmarkResults() {
 
   return {
     ...query,
-    data: query.data?.data || [],
+    results: query.data?.data || [],
   };
 }
 

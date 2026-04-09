@@ -3,7 +3,7 @@
  */
 
 import apiClient from './client';
-import type { Run, RunCreate, RunUpdate, RunListResponse, RunDetail, APIResponse } from '@/types';
+import type { Run, RunCreate, RunUpdate, RunListResponse, RunDetail, Metric, APIResponse } from '@/types';
 
 const BASE_PATH = '/api/v1/runs';
 
@@ -61,7 +61,7 @@ export const runsApi = {
     message?: string | null
   ): Promise<APIResponse<Run>> {
     const { data } = await apiClient.post<APIResponse<Run>>(
-      `${BASE_PATH}/{runId}/status`.replace('{runId}', runId),
+      `${BASE_PATH}/${runId}/status`,
       {},
       { params: { status, message } }
     );
@@ -79,8 +79,8 @@ export const runsApi = {
   /**
    * Get metrics for a run
    */
-  async getRunMetrics(runId: string): Promise<APIResponse<unknown[]>> {
-    const { data } = await apiClient.get<APIResponse<unknown[]>>(`${BASE_PATH}/${runId}/metrics`);
+  async getRunMetrics(runId: string): Promise<APIResponse<Metric[]>> {
+    const { data } = await apiClient.get<APIResponse<Metric[]>>(`${BASE_PATH}/${runId}/metrics`);
     return data;
   },
 
@@ -99,19 +99,13 @@ export const runsApi = {
    */
   async getRunStats(): Promise<APIResponse<{
     total_runs: number;
-    completed_runs: number;
-    failed_runs: number;
-    pending_runs: number;
-    running_runs: number;
-    avg_duration_seconds?: number | null;
+    by_status: Record<string, number>;
+    by_type: Record<string, number>;
   }>> {
     const { data } = await apiClient.get<APIResponse<{
       total_runs: number;
-      completed_runs: number;
-      failed_runs: number;
-      pending_runs: number;
-      running_runs: number;
-      avg_duration_seconds?: number | null;
+      by_status: Record<string, number>;
+      by_type: Record<string, number>;
     }>>(`${BASE_PATH}/stats`);
     return data;
   },

@@ -21,18 +21,22 @@ import {
 import { useForm } from 'react-hook-form';
 import { useState } from 'react';
 import { IconSearch, IconPlus, IconTrash } from '@tabler/icons-react';
-import { useModels, useDeleteModel, useModelFamilies } from '@/hooks/useModels';
+import { useNavigate } from 'react-router-dom';
+import { useModels, useDeleteModel, useModelFamilies, useCreateModel } from '@/hooks/useModels';
 import { LoadingSpinner, ErrorDisplay, DataTable, StatusBadge } from '@/components/common';
 import { formatDateTime, extractModelFamily, parseQuantization } from '@/utils';
 import { ColumnDef } from '@tanstack/react-table';
-import type { Model } from '@/types';
+import { ActionIcon } from '@mantine/core';
+import type { Model, ModelCreate } from '@/types';
 
 export default function ModelsPage() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [selectedFamily, setSelectedFamily] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<Model | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
 
   const { data: modelsData, isLoading, error } = useModels({
     page: 1,
@@ -44,6 +48,20 @@ export default function ModelsPage() {
 
   const { data: familiesData } = useModelFamilies();
   const deleteModel = useDeleteModel();
+  const createModel = useCreateModel();
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<ModelCreate>({
+    defaultValues: { name: '', checkpoint: '', model_type: 'llm' },
+  });
+
+  const handleAddModel = (data: ModelCreate) => {
+    createModel.mutate(data, {
+      onSuccess: () => {
+        setAddModalOpen(false);
+        reset();
+      },
+    });
+  };
 
   const models = modelsData?.data || [];
   const families = ['All', ...(familiesData?.data || [])].map((f) => ({ value: f, label: f }));
@@ -123,6 +141,25 @@ export default function ModelsPage() {
         </Text>
       ),
     },
+    {
+      id: 'actions',
+      header: '',
+      cell: ({ row }) => (
+        <ActionIcon
+          size="sm"
+          color="red"
+          variant="subtle"
+          aria-label="Delete model"
+          onClick={(e) => {
+            e.stopPropagation();
+            setSelectedModel(row.original);
+            setDeleteModalOpen(true);
+          }}
+        >
+          <IconTrash size={16} />
+        </ActionIcon>
+      ),
+    },
   ];
 
   if (error) {
@@ -133,7 +170,7 @@ export default function ModelsPage() {
     <Box>
       <Group justify="space-between" mb="xl">
         <Title order={2}>Models</Title>
-        <Button leftSection={<IconPlus size={18} />}>
+        <Button leftSection={<IconPlus size={18} />} onClick={() => setAddModalOpen(true)}>
           Add Model
         </Button>
       </Group>
@@ -189,7 +226,7 @@ export default function ModelsPage() {
           <DataTable
             data={models}
             columns={columns}
-            onRowClick={(row) => (window.location.href = `/models/${row.id}`)}
+            onRowClick={(row) => navigate(`/models/${row.id}`)}
           />
         )}
       </Card>
@@ -212,6 +249,56 @@ export default function ModelsPage() {
             Delete
           </Button>
         </Group>
+      </Modal>
+
+      {/* Add Model Modal */}
+      <Modal
+        opened={addModalOpen}
+        onClose={() => { setAddModalOpen(false); reset(); }}
+        title="Add Model"
+      >
+        <form onSubmit={handleSubmit(handleAddModel)}>
+          <Stack gap="md">
+            <TextInput
+              label="Name"
+              placeholder="Llama 3.2 1B Instruct"
+              required
+              error={errors.name?.message}
+              {...register('name', { required: 'Name is required' })}
+            />
+            <TextInput
+              label="Checkpoint"
+              placeholder="Llama-3.2-1B-Instruct-GGUF"
+              required
+              error={errors.checkpoint?.message}
+              {...register('checkpoint', { required: 'Checkpoint is required' })}
+            />
+            <Select
+              label="Type"
+              data={[
+                { value: 'llm', label: 'LLM' },
+                { value: 'vlm', label: 'VLM (Vision-Language)' },
+                { value: 'embedding', label: 'Embedding' },
+              ]}
+              defaultValue="llm"
+              onChange={(value) => value}
+              {...register('model_type')}
+            />
+            <TextInput
+              label="HuggingFace Repo (optional)"
+              placeholder="meta-llama/Llama-3.2-1B-Instruct"
+              {...register('hf_repo')}
+            />
+            <Group justify="flex-end">
+              <Button variant="outline" onClick={() => { setAddModalOpen(false); reset(); }}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={createModel.isPending}>
+                Add Model
+              </Button>
+            </Group>
+          </Stack>
+        </form>
       </Modal>
     </Box>
   );

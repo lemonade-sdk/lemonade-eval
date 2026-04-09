@@ -16,19 +16,23 @@ import {
   Table,
   Skeleton,
   SimpleGrid,
+  SegmentedControl,
 } from '@mantine/core';
 import { useState, useMemo } from 'react';
-import { IconTrash, IconPlus } from '@tabler/icons-react';
+import { useQueries } from '@tanstack/react-query';
 import { useRuns } from '@/hooks/useRuns';
 import { useCompareMetrics } from '@/hooks/useMetrics';
 import { useModels } from '@/hooks/useModels';
 import { LoadingSpinner, ErrorDisplay, StatusBadge, MetricCard } from '@/components/common';
 import { BarChart, RadarChart } from '@/components/charts';
-import { formatDuration, formatDateTime } from '@/utils';
+import { formatDateTime } from '@/utils';
+import type { Model } from '@/types';
+import { metricsApi } from '@/api/metrics';
 import type { Run, Metric } from '@/types';
 
 export default function ComparePage() {
   const [selectedRunIds, setSelectedRunIds] = useState<string[]>([]);
+  const [selectedModelIds, setSelectedModelIds] = useState<string[]>([]);
   const [comparisonMode, setComparisonMode] = useState<'runs' | 'models'>('runs');
 
   const { data: runsData, isLoading: runsLoading } = useRuns({ page: 1, per_page: 100 });
@@ -44,11 +48,31 @@ export default function ComparePage() {
   // Get selected runs
   const selectedRuns = selectedRunIds.map((id) => runMap.get(id)).filter(Boolean) as Run[];
 
-  // Compare metrics for selected runs
+  // Compare metrics for selected runs — disabled in models mode
   const { data: comparisonData, isLoading: comparisonLoading } = useCompareMetrics(
-    selectedRunIds,
+    comparisonMode === 'runs' ? selectedRunIds : [],
     ['performance', 'accuracy']
   );
+
+  // useQueries for model aggregates — only fires in models mode
+  const modelAggregateQueries = useQueries({
+    queries: selectedModelIds.map((modelId) => ({
+      queryKey: ['metrics', 'aggregate', { model_id: modelId, category: 'performance' }],
+      queryFn: () => metricsApi.getAggregateMetrics({ model_id: modelId, category: 'performance' }),
+      enabled: selectedModelIds.length > 0 && comparisonMode === 'models',
+    })),
+  });
+
+  const modelAggregatesLoading = modelAggregateQueries.some((q) => q.isLoading);
+
+  const modelAggregates = modelAggregateQueries
+    .map((q, i) => ({
+      model: models.find((m) => m.id === selectedModelIds[i]),
+      data: q.data?.data || [],
+      isLoading: q.isLoading,
+      isError: q.isError,
+    }))
+    .filter((item): item is typeof item & { model: Model } => item.model !== undefined);
 
   // Prepare data for radar chart
   const radarData = useMemo(() => {
@@ -66,7 +90,7 @@ export default function ComparePage() {
       selectedRuns.forEach((run, index) => {
         const runMetrics = metrics[run.id] || [];
         const metric = runMetrics.find((m: Metric) => m.name === subject);
-        dataPoint[`run_${index}`] = metric?.value_numeric || 0;
+        dataPoint[`run_${index}`] = metric?.value_numeric ?? 0;
       });
       return dataPoint;
     });
@@ -80,36 +104,61 @@ export default function ComparePage() {
   return (
     <Box>
       <Group justify="space-between" mb="xl">
-        <Title order={2}>Compare Runs</Title>
+        <Title order={2}>{comparisonMode === 'runs' ? 'Compare Runs' : 'Compare Models'}</Title>
       </Group>
 
-      {/* Run Selection */}
+      {/* Selection Card */}
       <Card padding="lg" radius="md" withBorder mb="md">
         <Text fw={600} mb="sm">
-          Select Runs to Compare
+          Select {comparisonMode === 'runs' ? 'Runs' : 'Models'} to Compare
         </Text>
-        <MultiSelect
-          data={runOptions}
-          value={selectedRunIds}
-          onChange={(values) => setSelectedRunIds(values)}
-          placeholder="Choose runs..."
-          maxDropdownHeight={300}
-          clearable
-          searchable
-          style={{ maxWidth: 600 }}
+
+        <SegmentedControl
+          value={comparisonMode}
+          onChange={(v) => setComparisonMode(v as 'runs' | 'models')}
+          data={[
+            { value: 'runs', label: 'Compare Runs' },
+            { value: 'models', label: 'Compare Models' },
+          ]}
+          mb="sm"
         />
+
+        {comparisonMode === 'runs' ? (
+          <MultiSelect
+            data={runOptions}
+            value={selectedRunIds}
+            onChange={(values) => setSelectedRunIds(values)}
+            placeholder="Choose runs..."
+            maxDropdownHeight={300}
+            clearable
+            searchable
+            style={{ maxWidth: 600 }}
+          />
+        ) : (
+          <MultiSelect
+            data={models.map((m) => ({ value: m.id, label: m.name }))}
+            value={selectedModelIds}
+            onChange={(values) => setSelectedModelIds(values)}
+            placeholder="Choose models to compare..."
+            maxDropdownHeight={300}
+            clearable
+            searchable
+            style={{ maxWidth: 600 }}
+          />
+        )}
+
         <Text size="xs" c="dimmed" mt="xs">
-          Select 2-5 runs to compare their metrics side by side
+          Select 2-5 {comparisonMode === 'runs' ? 'runs' : 'models'} to compare their metrics side by side
         </Text>
       </Card>
 
-      {selectedRunIds.length < 2 ? (
+      {(comparisonMode === 'runs' ? selectedRunIds : selectedModelIds).length < 2 ? (
         <Card padding="xl" radius="md" withBorder ta="center">
           <Text c="dimmed">
-            Select at least 2 runs to see comparison results
+            Select at least 2 {comparisonMode === 'runs' ? 'runs' : 'models'} to see comparison results
           </Text>
         </Card>
-      ) : (
+      ) : comparisonMode === 'runs' ? (
         <>
           {/* Selected Runs Overview */}
           <Card padding="lg" radius="md" withBorder mb="md">
@@ -156,7 +205,7 @@ export default function ComparePage() {
                     <Table.Th>Metric</Table.Th>
                     {selectedRuns.map((run) => (
                       <Table.Th key={run.id} ta="center">
-                        {run.build_name.slice(0, 20)}...
+                        {run.build_name.length > 20 ? `${run.build_name.slice(0, 20)}…` : run.build_name}
                       </Table.Th>
                     ))}
                   </Table.Tr>
@@ -260,6 +309,59 @@ export default function ComparePage() {
             </Grid.Col>
           </Grid>
         </>
+      ) : (
+        /* Models comparison */
+        <Card padding="lg" radius="md" withBorder>
+          <Title order={4} mb="md">Model Performance Comparison</Title>
+          {modelAggregatesLoading ? (
+            <Skeleton height={300} />
+          ) : (
+            <>
+              <Table striped>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Metric</Table.Th>
+                    {modelAggregates.map(({ model }) => (
+                      <Table.Th key={model.id} ta="center">{model.name}</Table.Th>
+                    ))}
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {['token_generation_tokens_per_second', 'seconds_to_first_token', 'prefill_tokens_per_second', 'max_memory_used_gbyte'].map((metricName) => {
+                    const rowValues = modelAggregates.map(({ data }) => {
+                      const entry = (data as any[]).find((d: any) => d.name === metricName);
+                      return entry?.mean ?? null;
+                    });
+                    const numericValues = rowValues.filter((v): v is number => v !== null);
+                    const lowerIsBetter = ['seconds_to_first_token', 'max_memory_used_gbyte'].includes(metricName);
+                    const best = lowerIsBetter ? Math.min(...numericValues) : Math.max(...numericValues);
+                    return (
+                      <Table.Tr key={metricName}>
+                        <Table.Td><Text fw={500} size="sm">{metricName.replace(/_/g, ' ')}</Text></Table.Td>
+                        {rowValues.map((val, idx) => (
+                          <Table.Td key={idx} ta="center" bg={val === best ? 'var(--mantine-color-green-light)' : undefined}>
+                            <Text size="sm" fw={val === best ? 700 : 400}>{val !== null ? val.toFixed(3) : '-'}</Text>
+                          </Table.Td>
+                        ))}
+                      </Table.Tr>
+                    );
+                  })}
+                </Table.Tbody>
+              </Table>
+              <BarChart
+                data={modelAggregates.map(({ model, data }) => {
+                  const tps = (data as any[]).find((d: any) => d.name === 'token_generation_tokens_per_second');
+                  return { name: model.name, value: tps?.mean ?? 0 };
+                })}
+                dataKey="value"
+                title="Average Tokens per Second"
+                unit="tok/s"
+                height={250}
+                highlightBest
+              />
+            </>
+          )}
+        </Card>
       )}
     </Box>
   );

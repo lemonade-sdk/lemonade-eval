@@ -27,7 +27,7 @@ import type { Run, RunStatus, RunType } from '@/types';
 
 export default function RunsPage() {
   const [search, setSearch] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState<string[] | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<string[]>([]);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   const [selectedBackend, setSelectedBackend] = useState<string | null>(null);
@@ -35,7 +35,7 @@ export default function RunsPage() {
   const { data: runsData, isLoading, error } = useRuns({
     page: 1,
     per_page: 50,
-    status: selectedStatus ? selectedStatus.join(',') : null,
+    status: selectedStatus.length > 0 ? selectedStatus.join(',') : null,
     run_type: selectedType,
     device: selectedDevice,
     backend: selectedBackend,

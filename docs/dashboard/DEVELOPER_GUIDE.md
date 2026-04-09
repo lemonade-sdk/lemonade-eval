@@ -385,7 +385,7 @@ python scripts/create_admin.py
 
 ```bash
 # With auto-reload
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
 
 # Or using the Makefile/command
 make dev
@@ -395,10 +395,10 @@ make dev
 
 ```bash
 # Health check
-curl http://localhost:8000/api/v1/health
+curl http://localhost:3001/api/v1/health
 
 # Access API docs
-# Open http://localhost:8000/docs in browser
+# Open http://localhost:3001/docs in browser
 ```
 
 ### Frontend Setup
@@ -425,8 +425,8 @@ cp .env.example .env    # Linux/macOS
 **Development Environment (.env):**
 
 ```env
-VITE_API_BASE_URL=http://localhost:8000
-VITE_WS_BASE_URL=ws://localhost:8000
+VITE_API_BASE_URL=http://localhost:3001
+VITE_WS_BASE_URL=ws://localhost:3001
 VITE_APP_NAME=Lemonade Eval Dashboard
 VITE_APP_VERSION=1.0.0
 
@@ -444,7 +444,7 @@ npm run dev
 
 #### 4. Verify Setup
 
-Open `http://localhost:3000` in your browser.
+Open `http://localhost:5173` in your browser.
 
 ### Docker Development
 
@@ -462,7 +462,7 @@ services:
       dockerfile: Dockerfile
       target: development
     ports:
-      - "8000:8000"
+      - "3001:3001"
     environment:
       - DEBUG=true
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/lemonade_dev
@@ -472,7 +472,7 @@ services:
       - backend_logs:/app/logs
     depends_on:
       - db
-    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 3001
 
   frontend:
     build:
@@ -1075,7 +1075,7 @@ Ensure accessibility compliance:
 
 ## Additional Resources
 
-- **API Documentation**: `http://localhost:8000/docs`
+- **API Documentation**: `http://localhost:3001/docs`
 - **Database Migrations**: `dashboard/backend/alembic/versions/`
 - **Component Library**: Mantine v7 docs at https://mantine.dev/
 - **Testing Library**: https://testing-library.com/

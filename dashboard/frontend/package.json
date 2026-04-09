@@ -16,11 +16,14 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\""
   },
   "dependencies": {
+    "@mantine/charts": "^7.9.0",
     "@mantine/core": "^7.9.0",
     "@mantine/dates": "^7.9.0",
     "@mantine/hooks": "^7.9.0",
-    "@mantine/charts": "^7.9.0",
+    "@mantine/notifications": "^7.9.0",
+    "@tabler/icons-react": "^3.6.0",
     "@tanstack/react-query": "^5.45.0",
+    "@tanstack/react-query-devtools": "^5.96.2",
     "@tanstack/react-table": "^8.17.0",
     "axios": "^1.7.2",
     "clsx": "^2.1.1",
@@ -31,9 +34,7 @@
     "react-router-dom": "^6.23.1",
     "recharts": "^2.12.7",
     "zod": "^3.25.76",
-    "zustand": "^4.5.2",
-    "@tabler/icons-react": "^3.6.0",
-    "@mantine/notifications": "^7.9.0"
+    "zustand": "^4.5.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.4.0",

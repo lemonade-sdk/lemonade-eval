@@ -24,7 +24,7 @@ Complete API reference for the Lemonade Eval Dashboard backend.
 
 | Environment | URL |
 |-------------|-----|
-| Development | `http://localhost:8000` |
+| Development | `http://localhost:3001` |
 | Production | `https://your-domain.com` |
 
 ### API Prefixes
@@ -226,7 +226,7 @@ Health check endpoint to verify API and database status.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/health
+curl http://localhost:3001/api/v1/health
 ```
 
 **Response (200 OK):**
@@ -255,7 +255,7 @@ Readiness check for Kubernetes/load balancer health checks.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/health/ready
+curl http://localhost:3001/api/v1/health/ready
 ```
 
 **Response (200 OK):**
@@ -283,7 +283,7 @@ User login endpoint.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/login \
+curl -X POST http://localhost:3001/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "email": "user@example.com",
@@ -328,7 +328,7 @@ User logout endpoint.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/logout \
+curl -X POST http://localhost:3001/api/v1/auth/logout \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -348,7 +348,7 @@ Refresh access token.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/auth/refresh \
+curl -X POST http://localhost:3001/api/v1/auth/refresh \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -370,7 +370,7 @@ Get current user information.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/auth/me \
+curl http://localhost:3001/api/v1/auth/me \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -410,7 +410,7 @@ List all models with pagination and filtering.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/models?page=1&per_page=10&family=Llama" \
+curl "http://localhost:3001/api/v1/models?page=1&per_page=10&family=Llama" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -449,7 +449,7 @@ Create a new model.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/models \
+curl -X POST http://localhost:3001/api/v1/models \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{
@@ -499,7 +499,7 @@ Get a specific model by ID.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/models/model-abc123 \
+curl http://localhost:3001/api/v1/models/model-abc123 \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -529,7 +529,7 @@ Update an existing model.
 
 **Request:**
 ```bash
-curl -X PUT http://localhost:8000/api/v1/models/model-abc123 \
+curl -X PUT http://localhost:3001/api/v1/models/model-abc123 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{
@@ -563,7 +563,7 @@ Delete a model and all associated runs/metrics.
 
 **Request:**
 ```bash
-curl -X DELETE http://localhost:8000/api/v1/models/model-abc123 \
+curl -X DELETE http://localhost:3001/api/v1/models/model-abc123 \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -583,7 +583,7 @@ Get list of unique model families.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/models/families/list \
+curl http://localhost:3001/api/v1/models/families/list \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -601,7 +601,7 @@ Get all versions of a model.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/models/model-abc123/versions \
+curl http://localhost:3001/api/v1/models/model-abc123/versions \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -633,7 +633,7 @@ Get recent runs for a model.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/models/model-abc123/runs?limit=50" \
+curl "http://localhost:3001/api/v1/models/model-abc123/runs?limit=50" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -684,7 +684,7 @@ List evaluation runs with pagination and filtering.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/runs?status=completed&run_type=benchmark" \
+curl "http://localhost:3001/api/v1/runs?status=completed&run_type=benchmark" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -727,7 +727,7 @@ Create a new evaluation run.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/runs \
+curl -X POST http://localhost:3001/api/v1/runs \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{
@@ -786,7 +786,7 @@ Get a specific run by ID.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/runs/run-xyz789?include_metrics=true" \
+curl "http://localhost:3001/api/v1/runs/run-xyz789?include_metrics=true" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -838,7 +838,7 @@ Update an existing run.
 
 **Request:**
 ```bash
-curl -X PUT http://localhost:8000/api/v1/runs/run-xyz789 \
+curl -X PUT http://localhost:3001/api/v1/runs/run-xyz789 \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{
@@ -879,7 +879,7 @@ Update run status with automatic timestamp management.
 
 **Request:**
 ```bash
-curl -X POST "http://localhost:8000/api/v1/runs/run-xyz789/status?status=running" \
+curl -X POST "http://localhost:3001/api/v1/runs/run-xyz789/status?status=running" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -908,7 +908,7 @@ Get recent runs.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/runs/recent/list?limit=5" \
+curl "http://localhost:3001/api/v1/runs/recent/list?limit=5" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -933,7 +933,7 @@ Get overall run statistics.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/runs/stats \
+curl http://localhost:3001/api/v1/runs/stats \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -958,7 +958,7 @@ Delete a run (cascades to metrics).
 
 **Request:**
 ```bash
-curl -X DELETE http://localhost:8000/api/v1/runs/run-xyz789 \
+curl -X DELETE http://localhost:3001/api/v1/runs/run-xyz789 \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -976,7 +976,7 @@ Get all metrics for a run.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/runs/run-xyz789/metrics \
+curl http://localhost:3001/api/v1/runs/run-xyz789/metrics \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -1030,7 +1030,7 @@ List metrics with pagination and filtering.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/metrics?run_id=run-xyz789&category=performance" \
+curl "http://localhost:3001/api/v1/metrics?run_id=run-xyz789&category=performance" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -1066,7 +1066,7 @@ Create a new metric.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/metrics \
+curl -X POST http://localhost:3001/api/v1/metrics \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{
@@ -1127,7 +1127,7 @@ Get aggregated metrics.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/metrics/aggregate?category=performance&metric_name=token_generation_tokens_per_second" \
+curl "http://localhost:3001/api/v1/metrics/aggregate?category=performance&metric_name=token_generation_tokens_per_second" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -1160,7 +1160,7 @@ Get metric trends for a model.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/metrics/trends?modelId=model-abc123&metricName=token_generation_tokens_per_second&limit=50" \
+curl "http://localhost:3001/api/v1/metrics/trends?modelId=model-abc123&metricName=token_generation_tokens_per_second&limit=50" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -1208,7 +1208,7 @@ Compare metrics across runs.
 
 **Request:**
 ```bash
-curl "http://localhost:8000/api/v1/metrics/compare?run_ids=run-1,run-2,run-3&categories=performance,accuracy" \
+curl "http://localhost:3001/api/v1/metrics/compare?run_ids=run-1,run-2,run-3&categories=performance,accuracy" \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -1265,7 +1265,7 @@ Get performance metrics for a specific run.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/metrics/performance/run-xyz789 \
+curl http://localhost:3001/api/v1/metrics/performance/run-xyz789 \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -1314,7 +1314,7 @@ Receive evaluation results from lemonade-eval CLI.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/import/evaluation \
+curl -X POST http://localhost:3001/api/v1/import/evaluation \
   -H "Content-Type: application/json" \
   -H "X-CLI-Signature: <hmac-signature>" \
   -d '{
@@ -1352,7 +1352,7 @@ Bulk import multiple evaluations.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/import/bulk \
+curl -X POST http://localhost:3001/api/v1/import/bulk \
   -H "Content-Type: application/json" \
   -H "X-CLI-Signature: <hmac-signature>" \
   -d '{
@@ -1395,7 +1395,7 @@ Import evaluation from YAML data.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/import/yaml \
+curl -X POST http://localhost:3001/api/v1/import/yaml \
   -H "Content-Type: application/json" \
   -H "X-CLI-Signature: <hmac-signature>" \
   -d '{
@@ -1428,7 +1428,7 @@ List all import jobs.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/import/jobs \
+curl http://localhost:3001/api/v1/import/jobs \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -1458,7 +1458,7 @@ Get status of a specific import job.
 
 **Request:**
 ```bash
-curl http://localhost:8000/api/v1/import/jobs/job-123 \
+curl http://localhost:3001/api/v1/import/jobs/job-123 \
   -H "Authorization: Bearer your-token"
 ```
 
@@ -1486,7 +1486,7 @@ Scan a cache directory for import candidates.
 
 **Request:**
 ```bash
-curl -X POST http://localhost:8000/api/v1/import/scan \
+curl -X POST http://localhost:3001/api/v1/import/scan \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer your-token" \
   -d '{
@@ -1528,7 +1528,7 @@ Connect for real-time evaluation updates.
 
 **Connection Example:**
 ```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/v1/evaluations?run_id=run-xyz789');
+const ws = new WebSocket('ws://localhost:3001/ws/v1/evaluations?run_id=run-xyz789');
 
 ws.onopen = () => {
   console.log('Connected to WebSocket');
@@ -1629,11 +1629,11 @@ Same interface as `/ws/v1/evaluations` but optimized for CLI client updates.
 
 The complete OpenAPI specification is available at:
 
-- **Swagger UI**: `http://localhost:8000/docs`
-- **ReDoc**: `http://localhost:8000/redoc`
-- **JSON Spec**: `http://localhost:8000/openapi.json`
+- **Swagger UI**: `http://localhost:3001/docs`
+- **ReDoc**: `http://localhost:3001/redoc`
+- **JSON Spec**: `http://localhost:3001/openapi.json`
 
 **Download OpenAPI Spec:**
 ```bash
-curl http://localhost:8000/openapi.json -o openapi.json
+curl http://localhost:3001/openapi.json -o openapi.json
 ```
