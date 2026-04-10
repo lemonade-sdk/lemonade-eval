@@ -1,0 +1,513 @@
+{
+  "name": "Anomaly Detection Alerts",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/models",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-models",
+      "name": "Fetch Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract model IDs for processing\nconst models = $input.first()?.json?.data || $input.first()?.json || [];\n\nreturn models.map(m => ({\n  json: {\n    model_id: m.id,\n    model_name: m.name,\n    checkpoint: m.checkpoint,\n    family: m.family,\n    anomaly_detection_enabled: m.metadata?.anomaly_detection_enabled ?? true,\n    alert_thresholds: m.metadata?.alert_thresholds || {\n      ttsft_std_dev: 2.0,\n      tps_drop_percent: 20,\n      memory_increase_percent: 15\n    }\n  }\n}));"
+      },
+      "id": "extract-models",
+      "name": "Extract Models",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/metrics/trends",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "={{ $json.model_id }}"
+            },
+            {
+              "name": "metric_name",
+              "value": "seconds_to_first_token"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-ttsft-trends",
+      "name": "Fetch TTFT Trends",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/metrics/trends",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "={{ $json.model_id }}"
+            },
+            {
+              "name": "metric_name",
+              "value": "token_generation_tokens_per_second"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-tps-trends",
+      "name": "Fetch TPS Trends",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/metrics/trends",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "={{ $json.model_id }}"
+            },
+            {
+              "name": "metric_name",
+              "value": "max_memory_used_gbyte"
+            },
+            {
+              "name": "limit",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-memory-trends",
+      "name": "Fetch Memory Trends",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate statistics and detect anomalies using z-score method\nconst ttsftData = $node[\"Fetch TTFT Trends\"].json?.data || [];\nconst tpsData = $node[\"Fetch TPS Trends\"].json?.data || [];\nconst memoryData = $node[\"Fetch Memory Trends\"].json?.data || [];\n\nconst thresholds = $input.first().json.alert_thresholds;\n\nfunction calculateStats(values) {\n  if (values.length < 3) return null;\n  \n  const n = values.length;\n  const mean = values.reduce((a, b) => a + b, 0) / n;\n  const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / n;\n  const stdDev = Math.sqrt(variance);\n  \n  return { mean, stdDev, min: Math.min(...values), max: Math.max(...values) };\n}\n\nfunction detectAnomalies(data, metricName, thresholdStdDev) {\n  const values = data.map(d => d.value).filter(v => v !== null && v !== undefined);\n  if (values.length < 3) return [];\n  \n  const stats = calculateStats(values);\n  if (!stats || stats.stdDev === 0) return [];\n  \n  const anomalies = [];\n  const latestValue = values[values.length - 1];\n  const zScore = Math.abs((latestValue - stats.mean) / stats.stdDev);\n  \n  if (zScore > thresholdStdDev) {\n    anomalies.push({\n      metric: metricName,\n      latest_value: latestValue,\n      mean: stats.mean,\n      std_dev: stats.stdDev,\n      z_score: zScore,\n      deviation_percent: ((latestValue - stats.mean) / stats.mean) * 100,\n      severity: zScore > 3 ? 'critical' : zScore > 2.5 ? 'high' : 'medium',\n      detected_at: new Date().toISOString()\n    });\n  }\n  \n  // Check for trend degradation (last 5 values vs previous 5)\n  if (values.length >= 10) {\n    const recent = values.slice(-5);\n    const previous = values.slice(-10, -5);\n    const recentAvg = recent.reduce((a, b) => a + b, 0) / 5;\n    const previousAvg = previous.reduce((a, b) => a + b, 0) / 5;\n    const changePercent = ((recentAvg - previousAvg) / previousAvg) * 100;\n    \n    // For TTFT, increase is bad; for TPS, decrease is bad\n    const isDegradation = metricName === 'seconds_to_first_token' \n      ? changePercent > 10 \n      : changePercent < -10;\n    \n    if (isDegradation && Math.abs(changePercent) > 10) {\n      anomalies.push({\n        metric: metricName,\n        trend_degradation: true,\n        change_percent: changePercent,\n        recent_avg: recentAvg,\n        previous_avg: previousAvg,\n        severity: Math.abs(changePercent) > 20 ? 'critical' : 'high',\n        detected_at: new Date().toISOString()\n      });\n    }\n  }\n  \n  return anomalies;\n}\n\nconst allAnomalies = [\n  ...detectAnomalies(ttsftData, 'seconds_to_first_token', thresholds.ttsft_std_dev || 2.0),\n  ...detectAnomalies(tpsData, 'token_generation_tokens_per_second', 2.0),\n  ...detectAnomalies(memoryData, 'max_memory_used_gbyte', thresholds.memory_increase_percent ? thresholds.memory_increase_percent / 10 : 1.5)\n];\n\nreturn {\n  json: {\n    model_id: $input.first().json.model_id,\n    model_name: $input.first().json.model_name,\n    checkpoint: $input.first().json.checkpoint,\n    anomalies: allAnomalies,\n    anomaly_count: allAnomalies.length,\n    has_critical: allAnomalies.some(a => a.severity === 'critical'),\n    analyzed_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "analyze-anomalies",
+      "name": "Analyze Anomalies",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value": "={{ $json.anomaly_count }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-anomalies",
+      "name": "Check Anomalies",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"text\": \"🚨 Anomaly Detected: {{ $json.model_name }}\",\n  \"blocks\": [\n    {\n      \"type\": \"header\",\n      \"text\": {\n        \"type\": \"plain_text\",\n        \"text\": \"🚨 Performance Anomaly Detected\"\n      }\n    },\n    {\n      \"type\": \"section\",\n      \"fields\": [\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Model:*\\n{{ $json.model_name }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Checkpoint:*\\n{{ $json.checkpoint }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Anomalies Found:*\\n{{ $json.anomaly_count }}\"\n        },\n        {\n          \"type\": \"mrkdwn\",\n          \"text\": \"*Severity:*\\n{{ $json.has_critical ? '🔴 CRITICAL' : '🟠 HIGH' }}\"\n        }\n      ]\n    },\n    {{#each $json.anomalies}}\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"*{{ this.metric }}:*\\nZ-Score: {{ this.z_score }} | Deviation: {{ Math.round(this.deviation_percent) }}%\"\n      }\n    },\n    {{/each}}\n    {\n      \"type\": \"section\",\n      \"text\": {\n        \"type\": \"mrkdwn\",\n        \"text\": \"<{{ $env.DASHBOARD_FRONTEND_URL || 'http://localhost:3000' }}/models/{{ $json.model_id }}/trends|View Trend Analysis>\"\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "send-slack-alert",
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/alerts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "={{ $json.model_id }}"
+            },
+            {
+              "name": "alert_type",
+              "value": "anomaly_detected"
+            },
+            {
+              "name": "severity",
+              "value": "={{ $json.has_critical ? 'critical' : 'high' }}"
+            },
+            {
+              "name": "title",
+              "value": "Performance Anomaly Detected: {{ $json.model_name }}"
+            },
+            {
+              "name": "details",
+              "value": "={{ JSON.stringify($json.anomalies) }}"
+            },
+            {
+              "name": "detected_at",
+              "value": "={{ $json.analyzed_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-alert",
+      "name": "Create Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.TEAMS_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"@type\": \"MessageCard\",\n  \"@context\": \"http://schema.org/extensions\",\n  \"themeColor\": \"{{ $json.has_critical ? 'FF0000' : 'FFA500' }}\",\n  \"summary\": \"Performance Anomaly: {{ $json.model_name }}\",\n  \"sections\": [\n    {\n      \"activityTitle\": \"🚨 Performance Anomaly Detected\",\n      \"activitySubtitle\": \"Lemonade Eval Dashboard\",\n      \"facts\": [\n        { \"name\": \"Model\", \"value\": \"{{ $json.model_name }}\" },\n        { \"name\": \"Checkpoint\", \"value\": \"{{ $json.checkpoint }}\" },\n        { \"name\": \"Anomalies\", \"value\": \"{{ $json.anomaly_count }}\" },\n        { \"name\": \"Severity\", \"value\": \"{{ $json.has_critical ? 'CRITICAL' : 'HIGH' }}\" }\n      ],\n      \"text\": \"{{ $json.anomalies.map(a => `${a.metric}: Z-Score ${a.z_score.toFixed(2)}, Deviation ${Math.round(a.deviation_percent)}%`).join('\\n') }}\",\n      \"potentialAction\": [\n        {\n          \"@type\": \"OpenUri\",\n          \"name\": \"View Trends\",\n          \"targets\": [{ \"os\": \"default\", \"uri\": \"{{ $env.DASHBOARD_FRONTEND_URL || 'http://localhost:3000' }}/models/{{ $json.model_id }}/trends\" }]\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "send-teams-alert",
+      "name": "Send Teams Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SMTP_API_URL || 'https://api.sendgrid.com/v3/mail/send' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"personalizations\": [\n    {\n      \"to\": [{ \"email\": \"{{ $env.ALERT_EMAIL || 'team@lemonade.ai' }}\" }],\n      \"subject\": \"🚨 Critical: Performance Anomaly - {{ $json.model_name }}\"\n    }\n  ],\n  \"from\": {\n    \"email\": \"{{ $env.EMAIL_FROM_ADDRESS || 'alerts@lemonade.ai' }}\",\n    \"name\": \"Lemonade Alerts\"\n  },\n  \"content\": [\n    {\n      \"type\": \"text/html\",\n      \"value\": \"{{ $node['Format Alert Email'].json.html }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "send-email-alert",
+      "name": "Send Email Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate HTML alert email\nconst data = $input.first().json;\n\nconst anomalyRows = data.anomalies.map(a => `\n  <tr>\n    <td style=\"padding: 8px; border: 1px solid #ddd;\">${a.metric}</td>\n    <td style=\"padding: 8px; border: 1px solid #ddd;\">${a.z_score ? a.z_score.toFixed(2) : 'N/A'}</td>\n    <td style=\"padding: 8px; border: 1px solid #ddd;\">${a.deviation_percent ? Math.round(a.deviation_percent) + '%' : 'N/A'}</td>\n    <td style=\"padding: 8px; border: 1px solid #ddd;\">\n      <span style=\"padding: 4px 8px; border-radius: 4px; background: ${a.severity === 'critical' ? '#dc3545' : a.severity === 'high' ? '#fd7e14' : '#ffc107'}; color: white;\">\n        ${a.severity.toUpperCase()}\n      </span>\n    </td>\n  </tr>\n`).join('');\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <style>\n    body { font-family: Arial, sans-serif; line-height: 1.6; }\n    .container { max-width: 600px; margin: 0 auto; padding: 20px; }\n    .header { background: #dc3545; color: white; padding: 20px; border-radius: 8px 8px 0 0; }\n    .content { background: #f9f9f9; padding: 20px; border: 1px solid #ddd; }\n    table { width: 100%; border-collapse: collapse; margin: 15px 0; }\n    th { background: #343a40; color: white; padding: 10px; text-align: left; }\n    .button { display: inline-block; padding: 12px 24px; background: #dc3545; color: white; text-decoration: none; border-radius: 6px; margin-top: 15px; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🚨 Performance Anomaly Alert</h1>\n      <p><strong>Severity:</strong> ${data.has_critical ? 'CRITICAL' : 'HIGH'}</p>\n    </div>\n    <div class=\"content\">\n      <h2>${data.model_name}</h2>\n      <p><strong>Checkpoint:</strong> ${data.checkpoint}</p>\n      <p><strong>Anomalies Detected:</strong> ${data.anomaly_count}</p>\n      \n      <table>\n        <thead>\n          <tr>\n            <th>Metric</th>\n            <th>Z-Score</th>\n            <th>Deviation</th>\n            <th>Severity</th>\n          </tr>\n        </thead>\n        <tbody>\n          ${anomalyRows}\n        </tbody>\n      </table>\n      \n      <a href=\"{{ $env.DASHBOARD_FRONTEND_URL || 'http://localhost:3000' }}/models/${data.model_id}/trends\" class=\"button\">View Trend Analysis</a>\n      \n      <p style=\"margin-top: 20px; font-size: 12px; color: #666;\">\n        Alert generated at: ${new Date(data.analyzed_at).toLocaleString()}\n      </p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn { json: { html, text: `Anomaly Alert: ${data.model_name} - ${data.anomaly_count} anomalies detected` } };"
+      },
+      "id": "format-alert-email",
+      "name": "Format Alert Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1430, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/alerts/log",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "={{ $json.model_id }}"
+            },
+            {
+              "name": "anomaly_count",
+              "value": "={{ $json.anomaly_count }}"
+            },
+            {
+              "name": "alerts_sent",
+              "value": "={\n  \"slack\": {{ $node[\"Send Slack Alert\"] ? 'true' : 'false' }},\n  \"teams\": {{ $node[\"Send Teams Alert\"] ? 'true' : 'false' }},\n  \"email\": {{ $node[\"Send Email Alert\"] ? 'true' : 'false' }}\n}"
+            },
+            {
+              "name": "logged_at",
+              "value": "={{ DateTime.now().toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-alert",
+      "name": "Log Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [550, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Models": {
+      "main": [
+        [
+          {
+            "node": "Extract Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Models": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Fetch TTFT Trends",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Fetch TTFT Trends": {
+      "main": [
+        [
+          {
+            "node": "Fetch TPS Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch TPS Trends": {
+      "main": [
+        [
+          {
+            "node": "Fetch Memory Trends",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Memory Trends": {
+      "main": [
+        [
+          {
+            "node": "Analyze Anomalies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Anomalies": {
+      "main": [
+        [
+          {
+            "node": "Check Anomalies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Anomalies": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Slack Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Teams Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Teams Alert": {
+      "main": [
+        [
+          {
+            "node": "Create Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Alert": {
+      "main": [
+        [
+          {
+            "node": "Format Alert Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Alert Email": {
+      "main": [
+        [
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Log Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Alert": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "anomaly-detection"
+    },
+    {
+      "name": "alerts"
+    },
+    {
+      "name": "monitoring"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-07T00:00:00.000Z",
+  "versionId": "anomaly-detection-v1"
+}

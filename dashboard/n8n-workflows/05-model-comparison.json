@@ -1,0 +1,398 @@
+{
+  "name": "Model Comparison Automation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "compare-models",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [0, 400],
+      "webhookId": "model-compare-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse comparison request\nconst inputData = $input.first()?.json || {};\nconst modelIds = inputData.model_ids || [];\nconst runIds = inputData.run_ids || [];\nconst categories = inputData.categories || ['performance', 'accuracy'];\n\nreturn {\n  json: {\n    comparison_id: `cmp_${Date.now()}`,\n    model_ids: modelIds,\n    run_ids: runIds,\n    categories: categories,\n    comparison_type: modelIds.length > 0 ? 'model' : 'run',\n    requested_at: new Date().toISOString(),\n    requested_by: inputData.requested_by || 'api'\n  }\n};"
+      },
+      "id": "parse-request",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/models/{{ $json.model_ids[0] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-model-1",
+      "name": "Fetch Model 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 200],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/models/{{ $json.model_ids[1] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-model-2",
+      "name": "Fetch Model 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 400],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/models/{{ $json.model_ids[2] }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "fetch-model-3",
+      "name": "Fetch Model 3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 600],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/metrics/compare",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "run_ids",
+              "value": "={{ $json.run_ids.join(',') }}"
+            },
+            {
+              "name": "categories",
+              "value": "={{ $json.categories.join(',') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-metrics-compare",
+      "name": "Fetch Metrics Compare",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/metrics/aggregate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "={{ $json.model_ids[0] }}"
+            },
+            {
+              "name": "category",
+              "value": "performance"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-aggregate-1",
+      "name": "Fetch Aggregate 1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 150]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/metrics/aggregate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "={{ $json.model_ids[1] }}"
+            },
+            {
+              "name": "category",
+              "value": "performance"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-aggregate-2",
+      "name": "Fetch Aggregate 2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process and compare metrics\nconst model1 = $node[\"Fetch Model 1\"].json?.data || {};\nconst model2 = $node[\"Fetch Model 2\"].json?.data || {};\nconst model3 = $node[\"Fetch Model 3\"].json?.data || {};\nconst compareData = $node[\"Fetch Metrics Compare\"].json?.data || {};\nconst aggregate1 = $node[\"Fetch Aggregate 1\"].json?.data || [];\nconst aggregate2 = $node[\"Fetch Aggregate 2\"].json?.data || [];\n\n// Build comparison table\nconst models = [model1, model2, model3].filter(m => m.id);\nconst modelNames = models.map(m => m.name || m.checkpoint || 'Unknown');\n\n// Compare key metrics\nconst metricsComparison = {};\n\n// Helper to find metric by name\nconst findMetric = (aggregates, name) => aggregates.find(m => m.name === name);\n\n// TTFT Comparison\nconst ttft1 = findMetric(aggregate1, 'seconds_to_first_token');\nconst ttft2 = findMetric(aggregate2, 'seconds_to_first_token');\nif (ttft1 && ttft2) {\n  const better = ttft1.mean < ttft2.mean ? modelNames[0] : modelNames[1];\n  const diff = ((ttft1.mean - ttft2.mean) / ttft2.mean * 100).toFixed(1);\n  metricsComparison['seconds_to_first_token'] = {\n    [modelNames[0]]: { value: ttft1.mean.toFixed(3), unit: ttft1.unit },\n    [modelNames[1]]: { value: ttft2.mean.toFixed(3), unit: ttft2.unit },\n    better: better,\n    diff_percent: Math.abs(diff)\n  };\n}\n\n// TPS Comparison\nconst tps1 = findMetric(aggregate1, 'token_generation_tokens_per_second');\nconst tps2 = findMetric(aggregate2, 'token_generation_tokens_per_second');\nif (tps1 && tps2) {\n  const better = tps1.mean > tps2.mean ? modelNames[0] : modelNames[1];\n  const diff = ((tps1.mean - tps2.mean) / tps2.mean * 100).toFixed(1);\n  metricsComparison['token_generation_tokens_per_second'] = {\n    [modelNames[0]]: { value: tps1.mean.toFixed(2), unit: tps1.unit },\n    [modelNames[1]]: { value: tps2.mean.toFixed(2), unit: tps2.unit },\n    better: better,\n    diff_percent: Math.abs(diff)\n  };\n}\n\n// Memory Comparison\nconst mem1 = findMetric(aggregate1, 'max_memory_used_gbyte');\nconst mem2 = findMetric(aggregate2, 'max_memory_used_gbyte');\nif (mem1 && mem2) {\n  const better = mem1.mean < mem2.mean ? modelNames[0] : modelNames[1];\n  const diff = ((mem1.mean - mem2.mean) / mem2.mean * 100).toFixed(1);\n  metricsComparison['max_memory_used_gbyte'] = {\n    [modelNames[0]]: { value: mem1.mean.toFixed(2), unit: mem1.unit },\n    [modelNames[1]]: { value: mem2.mean.toFixed(2), unit: mem2.unit },\n    better: better,\n    diff_percent: Math.abs(diff)\n  };\n}\n\n// Overall winner calculation\nlet model1Wins = 0;\nlet model2Wins = 0;\nObject.values(metricsComparison).forEach(m => {\n  if (m.better === modelNames[0]) model1Wins++;\n  else if (m.better === modelNames[1]) model2Wins++;\n});\n\nconst overallWinner = model1Wins > model2Wins ? modelNames[0] : model2Wins > model1Wins ? modelNames[1] : 'Tie';\n\nreturn {\n  json: {\n    comparison_id: $input.first().json.comparison_id,\n    models: models.map(m => ({\n      id: m.id,\n      name: m.name,\n      checkpoint: m.checkpoint,\n      family: m.family,\n      type: m.type,\n      quantization: m.quantization\n    })),\n    metrics_comparison: metricsComparison,\n    overall_winner: overallWinner,\n    win_counts: {\n      [modelNames[0]]: model1Wins,\n      [modelNames[1]]: model2Wins\n    },\n    compared_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "compare-metrics",
+      "name": "Compare Metrics",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generate HTML comparison report\nconst data = $input.first().json;\nconst models = data.models;\nconst comparison = data.metrics_comparison;\n\nconst modelHeaders = models.map(m => `<th>${m.name || m.checkpoint}</th>`).join('');\n\n// TTFT Row\nconst ttftData = comparison['seconds_to_first_token'];\nconst ttftRow = ttftData ? `\n  <tr>\n    <td>Seconds to First Token</td>\n    ${models.map(m => {\n      const val = ttftData[m.name];\n      const isBetter = ttftData.better === m.name;\n      return `<td style=\"${isBetter ? 'background: #d4edda; font-weight: bold;' : ''}\">${val ? val.value + ' ' + val.unit : 'N/A'}</td>`;\n    }).join('')}\n    <td>${ttftData.diff_percent.toFixed(1)}%</td>\n  </tr>` : '';\n\n// TPS Row\nconst tpsData = comparison['token_generation_tokens_per_second'];\nconst tpsRow = tpsData ? `\n  <tr>\n    <td>Token Generation TPS</td>\n    ${models.map(m => {\n      const val = tpsData[m.name];\n      const isBetter = tpsData.better === m.name;\n      return `<td style=\"${isBetter ? 'background: #d4edda; font-weight: bold;' : ''}\">${val ? val.value + ' ' + val.unit : 'N/A'}</td>`;\n    }).join('')}\n    <td>${tpsData.diff_percent.toFixed(1)}%</td>\n  </tr>` : '';\n\n// Memory Row\nconst memData = comparison['max_memory_used_gbyte'];\nconst memRow = memData ? `\n  <tr>\n    <td>Max Memory (GB)</td>\n    ${models.map(m => {\n      const val = memData[m.name];\n      const isBetter = memData.better === m.name;\n      return `<td style=\"${isBetter ? 'background: #d4edda; font-weight: bold;' : ''}\">${val ? val.value + ' ' + val.unit : 'N/A'}</td>`;\n    }).join('')}\n    <td>${memData.diff_percent.toFixed(1)}%</td>\n  </tr>` : '';\n\nconst html = `\n<!DOCTYPE html>\n<html>\n<head>\n  <meta charset=\"UTF-8\">\n  <style>\n    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }\n    .container { max-width: 1000px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }\n    .header { background: linear-gradient(135deg, #28a745 0%, #20c997 100%); color: white; padding: 30px; text-align: center; }\n    .content { padding: 30px; }\n    .winner-banner { background: #fff3cd; border: 2px solid #ffc107; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }\n    .winner-name { font-size: 24px; font-weight: bold; color: #856404; }\n    table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n    th { background: #343a40; color: white; padding: 15px; text-align: left; }\n    td { padding: 15px; border-bottom: 1px solid #dee2e6; }\n    tr:hover { background: #f8f9fa; }\n    .model-card { display: inline-block; background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 10px; min-width: 200px; }\n    .model-card h3 { margin: 0 0 10px; color: #495057; }\n    .metric-row { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #dee2e6; }\n    .footer { background: #343a40; color: white; padding: 20px; text-align: center; }\n  </style>\n</head>\n<body>\n  <div class=\"container\">\n    <div class=\"header\">\n      <h1>🏆 Model Comparison Report</h1>\n      <p>Generated: ${new Date(data.compared_at).toLocaleString()}</p>\n    </div>\n    \n    <div class=\"content\">\n      <h2>Models Compared</h2>\n      ${models.map(m => `\n        <div class=\"model-card\">\n          <h3>${m.name || m.checkpoint}</h3>\n          <div class=\"metric-row\"><span>Family:</span><strong>${m.family || 'N/A'}</strong></div>\n          <div class=\"metric-row\"><span>Type:</span><strong>${m.type || 'N/A'}</strong></div>\n          <div class=\"metric-row\"><span>Quantization:</span><strong>${m.quantization || 'N/A'}</strong></div>\n        </div>\n      `).join('')}\n      \n      <div class=\"winner-banner\">\n        <p style=\"margin: 0; font-size: 18px;\">Overall Winner</p>\n        <p class=\"winner-name\">🏆 ${data.overall_winner}</p>\n        <p style=\"margin: 10px 0 0; color: #856404;\">\n          ${data.win_counts ? Object.entries(data.win_counts).map(([m, c]) => `${m}: ${c} metrics`).join(' | ') : ''}\n        </p>\n      </div>\n      \n      <h2>Performance Comparison</h2>\n      <table>\n        <thead>\n          <tr>\n            <th>Metric</th>\n            ${models.map(m => `<th>${m.name || m.checkpoint}</th>`).join('')}\n            <th>Difference</th>\n          </tr>\n        </thead>\n        <tbody>\n          ${ttftRow}\n          ${tpsRow}\n          ${memRow}\n        </tbody>\n      </table>\n      \n      <p style=\"background: #e7f3ff; padding: 15px; border-radius: 8px; border-left: 4px solid #007bff; margin-top: 20px;\">\n        <a href=\"${$env.DASHBOARD_FRONTEND_URL || 'http://localhost:3000'}/compare?comparison=${data.comparison_id}\" style=\"color: #007bff; text-decoration: none; font-weight: bold;\">View interactive comparison</a> with detailed charts and analysis.\n      </p>\n    </div>\n    \n    <div class=\"footer\">\n      <p>Lemonade Eval Dashboard | Model Comparison Tool</p>\n    </div>\n  </div>\n</body>\n</html>\n`;\n\nreturn { json: { html, text: `Model Comparison: ${data.overall_winner} wins` } };"
+      },
+      "id": "generate-comparison-report",
+      "name": "Generate Comparison Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/comparisons",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "comparison_id",
+              "value": "={{ $json.comparison_id }}"
+            },
+            {
+              "name": "model_ids",
+              "value": "={{ JSON.stringify($json.models.map(m => m.id)) }}"
+            },
+            {
+              "name": "results",
+              "value": "={{ JSON.stringify($json) }}"
+            },
+            {
+              "name": "created_by",
+              "value": "={{ $input.first().json.requested_by }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-comparison",
+      "name": "Store Comparison",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1540, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SMTP_API_URL || 'https://api.sendgrid.com/v3/mail/send' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"personalizations\": [\n    {\n      \"to\": [{ \"email\": \"{{ $input.first().json.requested_by_email || 'team@lemonade.ai' }}\" }],\n      \"subject\": \"🏆 Model Comparison: {{ $node['Compare Metrics'].json.models.map(m => m.name).join(' vs ') }}\"\n    }\n  ],\n  \"from\": {\n    \"email\": \"{{ $env.EMAIL_FROM_ADDRESS || 'reports@lemonade.ai' }}\",\n    \"name\": \"Lemonade Reports\"\n  },\n  \"content\": [\n    {\n      \"type\": \"text/html\",\n      \"value\": \"{{ $node['Generate Comparison Report'].json.html }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "email-comparison",
+      "name": "Email Comparison",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 600]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "Fetch Model 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Model 1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Model 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Model 2": {
+      "main": [
+        [
+          {
+            "node": "Fetch Model 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Model 3": {
+      "main": [
+        [
+          {
+            "node": "Fetch Metrics Compare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Metrics Compare": {
+      "main": [
+        [
+          {
+            "node": "Fetch Aggregate 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Aggregate 1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Aggregate 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Aggregate 2": {
+      "main": [
+        [
+          {
+            "node": "Compare Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare Metrics": {
+      "main": [
+        [
+          {
+            "node": "Generate Comparison Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Comparison Report": {
+      "main": [
+        [
+          {
+            "node": "Store Comparison",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Comparison": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Email Comparison",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "model-comparison"
+    },
+    {
+      "name": "automation"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-07T00:00:00.000Z",
+  "versionId": "model-comparison-v1"
+}

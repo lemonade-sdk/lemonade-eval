@@ -9,6 +9,14 @@ For installation and usage instructions, see the main [README](../README.md).
 | [OGA for iGPU and CPU](ort_genai_igpu.md) | Using OnnxRuntime GenAI for model preparation on iGPU and CPU |
 | [Finetuned Model Export](finetuned_model_export.md) | Bring your own finetuned model to Ryzen AI |
 | [Power Profiling](power_profiling.md) | Power consumption measurements during evaluation |
+| [Dashboard Benchmark Guide](dashboard/benchmark_guide.md) | Running benchmarks and viewing results in the dashboard |
+
+## Dashboard Documentation
+
+| Document | Description |
+|----------|-------------|
+| [Benchmark Guide](dashboard/benchmark_guide.md) | Complete guide for benchmark workflow and dashboard UI |
+| [Implementation Summary](../dashboard/IMPLEMENTATION_SUMMARY.md) | Backend architecture and API reference |
 
 ## Accuracy Benchmarks
 

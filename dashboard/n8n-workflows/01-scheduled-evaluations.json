@@ -1,0 +1,424 @@
+{
+  "name": "Scheduled Evaluation Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/models",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "page",
+              "value": "1"
+            },
+            {
+              "name": "per_page",
+              "value": "100"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fetch-models",
+      "name": "Fetch Models",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3,
+        "retryInterval": 5000
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter models that need scheduled evaluations\nconst models = $input.all();\nconst results = [];\n\nmodels.forEach(model => {\n  const modelData = model.json.data || model.json;\n  if (Array.isArray(modelData)) {\n    modelData.forEach(m => {\n      // Check if model has scheduled evaluations enabled\n      if (m.metadata?.scheduled_eval_enabled === true || \n          m.metadata?.eval_frequency) {\n        results.push({\n          json: {\n            model_id: m.id,\n            model_name: m.name,\n            checkpoint: m.checkpoint,\n            eval_frequency: m.metadata?.eval_frequency || 'daily',\n            eval_types: m.metadata?.eval_types || ['benchmark'],\n            last_eval: m.metadata?.last_evaluation_date,\n            needs_evaluation: true\n          }\n        });\n      }\n    });\n  }\n});\n\nreturn results;"
+      },
+      "id": "filter-scheduled-models",
+      "name": "Filter Scheduled Models",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/runs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model_id",
+              "value": "={{ $json.model_id }}"
+            },
+            {
+              "name": "build_name",
+              "value": "=scheduled-{{ $json.eval_types[0] }}-{{ DateTime.now().toFormat('yyyyMMdd-HHmmss') }}"
+            },
+            {
+              "name": "run_type",
+              "value": "={{ $json.eval_types[0] }}"
+            },
+            {
+              "name": "status",
+              "value": "pending"
+            },
+            {
+              "name": "config",
+              "value": "={\n  \"scheduled\": true,\n  \"triggeredBy\": \"n8n-automation\",\n  \"frequency\": \"{{ $json.eval_frequency }}\"\n}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "create-evaluation-run",
+      "name": "Create Evaluation Run",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 300],
+      "retryOnFail": {
+        "value": true,
+        "maxRetries": 3,
+        "retryInterval": 10000
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/runs/{{ $json.data.id }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "running"
+            },
+            {
+              "name": "message",
+              "value": "Evaluation started by n8n scheduler"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "update-run-status",
+      "name": "Update Run Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/cli/execute",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "command",
+              "value": "lemonade-eval"
+            },
+            {
+              "name": "args",
+              "value": "=[\n  \"--input\", \"{{ $json.checkpoint }}\",\n  \"--cache-dir\", \"{{ $env.EVAL_CACHE_DIR }}\",\n  \"{{ $json.eval_types[0] }}\"\n]"
+            },
+            {
+              "name": "timeout",
+              "value": 3600
+            },
+            {
+              "name": "run_id",
+              "value": "={{ $node[\"Create Evaluation Run\"].json.data.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 3700000
+        }
+      },
+      "id": "execute-evaluation",
+      "name": "Execute Evaluation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value": "={{ $json.success === true }}",
+              "operation": "equal",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-execution-success",
+      "name": "Check Execution Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/runs/{{ $node[\"Create Evaluation Run\"].json.data.id }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "completed"
+            },
+            {
+              "name": "message",
+              "value": "Evaluation completed successfully"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mark-completed",
+      "name": "Mark Completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/runs/{{ $node[\"Create Evaluation Run\"].json.data.id }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "status",
+              "value": "failed"
+            },
+            {
+              "name": "message",
+              "value": "={{ $json.error || 'Evaluation failed' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "mark-failed",
+      "name": "Mark Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.DASHBOARD_API_URL }}/api/v1/import",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "run_id",
+              "value": "={{ $node[\"Create Evaluation Run\"].json.data.id }}"
+            },
+            {
+              "name": "yaml_path",
+              "value": "{{ $env.EVAL_CACHE_DIR }}/lemonade_stats.yaml"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "import-results",
+      "name": "Import Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 200]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-in-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [440, 500]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Models": {
+      "main": [
+        [
+          {
+            "node": "Filter Scheduled Models",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Scheduled Models": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Create Evaluation Run",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Create Evaluation Run": {
+      "main": [
+        [
+          {
+            "node": "Update Run Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Run Status": {
+      "main": [
+        [
+          {
+            "node": "Execute Evaluation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Evaluation": {
+      "main": [
+        [
+          {
+            "node": "Check Execution Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Execution Success": {
+      "main": [
+        [
+          {
+            "node": "Mark Completed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Completed": {
+      "main": [
+        [
+          {
+            "node": "Import Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Failed": {
+      "main": []
+    },
+    "Import Results": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "scheduled-evaluations"
+    },
+    {
+      "name": "automation"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-04-07T00:00:00.000Z",
+  "versionId": "scheduled-eval-v1"
+}
