@@ -84,12 +84,21 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
-        """Parse CORS origins from comma-separated string or list."""
+        """Parse CORS origins from JSON array, comma-separated string, or list."""
         if isinstance(v, str):
-            # Split comma-separated string
-            origins = [origin.strip() for origin in v.split(",")]
-            # Filter out empty strings and wildcards
+            import json
+            # Try JSON array first (e.g. '["http://localhost:3000"]')
+            stripped = v.strip()
+            if stripped.startswith("["):
+                try:
+                    return [o.strip() for o in json.loads(stripped) if o and o != "*"]
+                except json.JSONDecodeError:
+                    pass
+            # Fall back to comma-separated
+            origins = [origin.strip() for origin in stripped.split(",")]
             return [o for o in origins if o and o != "*"]
+        if isinstance(v, list):
+            return [o.strip() for o in v if o and o != "*"]
         return v
 
     # WebSocket
